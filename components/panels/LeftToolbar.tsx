@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { usePlanningStore } from "@/store/usePlanningStore";
-import { Panel, Button } from "@/components/ui/Controls";
+import { Panel, Button, LabeledNumber } from "@/components/ui/Controls";
 import {
   Hexagon,
   Grid2x2,
@@ -11,6 +12,8 @@ import {
   RefreshCw,
   Trash2,
   Combine,
+  Grid3x3,
+  Eraser,
 } from "lucide-react";
 import type { DrawMode } from "@/lib/types";
 import { FeatureEditor } from "./FeatureEditor";
@@ -54,6 +57,12 @@ export function LeftToolbar() {
   const boundary = usePlanningStore((s) => s.boundary);
   const hasGenerated = usePlanningStore((s) => s.features.some((f) => f.generated));
   const selectedId = usePlanningStore((s) => s.selectedId);
+  const roadCount = usePlanningStore((s) => s.roads.length);
+  const clearRoads = usePlanningStore((s) => s.clearRoads);
+  const fillRoadGrid = usePlanningStore((s) => s.fillRoadGrid);
+
+  const [gridSpacing, setGridSpacing] = useState(90);
+  const [gridAngle, setGridAngle] = useState(0);
 
   const toggle = (m: DrawMode) => setDrawMode(drawMode === m ? "none" : m);
 
@@ -119,6 +128,43 @@ export function LeftToolbar() {
               "Select a feature, then click an adjacent one to merge them."}
           </p>
         )}
+      </Panel>
+
+      <Panel title="Road network">
+        <div className="grid grid-cols-2 gap-2">
+          <LabeledNumber
+            label="Block spacing"
+            value={gridSpacing}
+            min={40}
+            max={400}
+            step={10}
+            suffix="m"
+            onChange={setGridSpacing}
+          />
+          <LabeledNumber
+            label="Grid angle"
+            value={gridAngle}
+            min={0}
+            max={90}
+            step={5}
+            suffix="°"
+            onChange={setGridAngle}
+          />
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => fillRoadGrid(gridSpacing, gridAngle)}
+          disabled={!boundary}
+        >
+          <Grid3x3 className="h-4 w-4" /> Fill boundary with grid
+        </Button>
+        <Button onClick={clearRoads} disabled={roadCount === 0}>
+          <Eraser className="h-4 w-4" /> Clear roads ({roadCount})
+        </Button>
+        <p className="text-[11px] text-slate-500 leading-snug">
+          Drawn roads snap to nearby roads so they connect. A grid gives every
+          block road frontage on all sides.
+        </p>
       </Panel>
 
       <Panel title="Generate">

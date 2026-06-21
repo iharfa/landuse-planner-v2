@@ -17,9 +17,11 @@ import {
   makeId,
   polygonArea,
   lineLength,
+  snapLineEndpoints,
   safeUnion,
   turf,
 } from "@/lib/geometry/turfHelpers";
+import { generateRoadGrid } from "@/lib/generation/roadGrid";
 import type { Polygon, MultiPolygon } from "geojson";
 
 function mergePolys(
@@ -72,6 +74,8 @@ interface PlanningState {
   addBoundary: (geometry: BoundaryFeature["geometry"]) => void;
   addParcel: (geometry: BoundaryFeature["geometry"]) => void;
   addRoad: (geometry: RoadFeature["geometry"]) => void;
+  clearRoads: () => void;
+  fillRoadGrid: (spacingM: number, angleDeg: number) => void;
 
   // generation
   generate: () => void;
@@ -162,17 +166,46 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     }),
 
   addRoad: (geometry) => {
-    const len = lineLength(geometry);
+    const existing = get().roads;
+    // snap the new road's endpoints onto the existing network so it connects
+    const snapped: RoadFeature["geometry"] = {
+      type: "LineString",
+      coordinates: snapLineEndpoints(
+        geometry.coordinates,
+        existing.map((r) => r.geometry),
+      ),
+    };
+    const len = lineLength(snapped);
     // The first road drawn is treated as the main arterial (commercial
     // frontage); later roads are secondary branches (residential frontage).
-    const arterial = get().roads.length === 0;
+    const arterial = existing.length === 0;
     set({
       roads: [
-        ...get().roads,
-        { id: makeId("road"), geometry, lengthM: len, arterial },
+        ...existing,
+        { id: makeId("road"), geometry: snapped, lengthM: len, arterial },
       ],
       drawMode: "none",
     });
+  },
+
+  clearRoads: () => {
+    set({ roads: [] });
+    get().pushToast("Roads cleared.", "info");
+  },
+
+  fillRoadGrid: (spacingM, angleDeg) => {
+    const boundary = get().boundary;
+    if (!boundary) {
+      get().pushToast("Draw a boundary first.", "error");
+      return;
+    }
+    const grid = generateRoadGrid(boundary, spacingM, angleDeg);
+    if (grid.length === 0) {
+      get().pushToast("Could not build a grid for this boundary.", "error");
+      return;
+    }
+    set({ roads: grid, drawMode: "none" });
+    get().pushToast(`Road grid added (${grid.length} segments).`, "success");
   },
 
   generate: () => {

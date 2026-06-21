@@ -22,6 +22,39 @@ export function polygonArea(geom: Polygon | MultiPolygon): number {
   }
 }
 
+/**
+ * Snap the start/end of a drawn road to the nearest point on any existing
+ * road within `thresholdM`, so hand-drawn roads connect to the network.
+ */
+export function snapLineEndpoints(
+  coords: Position[],
+  existing: LineString[],
+  thresholdM = 25,
+): Position[] {
+  if (existing.length === 0 || coords.length < 2) return coords;
+  const out = coords.map((c) => [...c]) as Position[];
+  for (const idx of [0, out.length - 1]) {
+    let best: Position | null = null;
+    let bestDist = thresholdM;
+    for (const line of existing) {
+      try {
+        const snap = turf.nearestPointOnLine(turf.lineString(line.coordinates), turf.point(out[idx]), {
+          units: "meters",
+        });
+        const dist = snap.properties.dist ?? Infinity;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = snap.geometry.coordinates;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (best) out[idx] = best;
+  }
+  return out;
+}
+
 export function lineLength(geom: LineString): number {
   try {
     return turf.length(turf.feature(geom), { units: "meters" });
