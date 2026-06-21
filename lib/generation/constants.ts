@@ -47,6 +47,9 @@ export const FRONTAGE_DEPTH_M: Record<DensityLevel, number> = {
   high: 22,
 };
 
+/** Conversion factor: 1 square foot = 0.092903 square metres. */
+export const SQFT_TO_SQM = 0.092903;
+
 /** Minimum boundary area (sqm) required to run the generator. */
 export const MIN_BOUNDARY_AREA_SQM = 5000;
 

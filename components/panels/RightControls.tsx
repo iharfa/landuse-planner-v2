@@ -55,21 +55,21 @@ export function RightControls() {
         <div className="h-px bg-white/10 my-1" />
         <LabeledSlider
           label="Residential plot size"
-          value={controls.residentialPlotSqm}
-          min={100}
-          max={1500}
+          value={controls.residentialPlotSqft}
+          min={1200}
+          max={3000}
           step={50}
-          suffix=" m²"
-          onChange={(v) => setControls({ residentialPlotSqm: v })}
+          suffix=" sqft"
+          onChange={(v) => setControls({ residentialPlotSqft: v })}
         />
         <LabeledSlider
           label="Commercial plot size"
-          value={controls.commercialPlotSqm}
-          min={300}
-          max={3000}
-          step={100}
-          suffix=" m²"
-          onChange={(v) => setControls({ commercialPlotSqm: v })}
+          value={controls.commercialPlotSqft}
+          min={3000}
+          max={20000}
+          step={250}
+          suffix=" sqft"
+          onChange={(v) => setControls({ commercialPlotSqft: v })}
         />
         <LabeledNumber
           label="Road width"
@@ -79,6 +79,35 @@ export function RightControls() {
           step={1}
           suffix="m"
           onChange={(v) => setControls({ roadWidthM: v })}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <LabeledNumber
+            label="Front setback"
+            value={controls.frontSetbackM}
+            min={0}
+            max={15}
+            step={0.5}
+            suffix="m"
+            onChange={(v) => setControls({ frontSetbackM: v })}
+          />
+          <LabeledNumber
+            label="Side setback"
+            value={controls.sideSetbackM}
+            min={0}
+            max={10}
+            step={0.5}
+            suffix="m"
+            onChange={(v) => setControls({ sideSetbackM: v })}
+          />
+        </div>
+        <LabeledSlider
+          label="Overlay opacity"
+          value={Math.round(controls.overlayOpacity * 100)}
+          min={10}
+          max={90}
+          step={5}
+          suffix="%"
+          onChange={(v) => setControls({ overlayOpacity: v / 100 })}
         />
         <SegmentedControl<DensityLevel>
           label="Density"

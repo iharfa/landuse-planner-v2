@@ -52,9 +52,17 @@ export interface PlanningControls {
   commercialPct: number;
   industrialPct: number;
   greenPct: number;
-  residentialPlotSqm: number;
-  commercialPlotSqm: number;
+  /** residential plot size in square feet (1,200–3,000 typical) */
+  residentialPlotSqft: number;
+  /** commercial plot size in square feet */
+  commercialPlotSqft: number;
   roadWidthM: number;
+  /** front setback from the road edge, in metres */
+  frontSetbackM: number;
+  /** side setback / gap between adjacent plots, in metres */
+  sideSetbackM: number;
+  /** opacity of the land-use overlay over the basemap (0.1–0.9) */
+  overlayOpacity: number;
   density: DensityLevel;
   walkability: WalkabilityTarget;
   population: number;
@@ -115,9 +123,12 @@ export const DEFAULT_CONTROLS: PlanningControls = {
   commercialPct: 15,
   industrialPct: 8,
   greenPct: 12,
-  residentialPlotSqm: 400,
-  commercialPlotSqm: 900,
+  residentialPlotSqft: 2000,
+  commercialPlotSqft: 8000,
   roadWidthM: 12,
+  frontSetbackM: 3,
+  sideSetbackM: 1.5,
+  overlayOpacity: 0.55,
   density: "medium",
   walkability: 400,
   population: 5000,

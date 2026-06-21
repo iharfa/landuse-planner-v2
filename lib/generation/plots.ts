@@ -5,6 +5,7 @@ import {
   DENSITY_PLOT_SCALE,
   FRONTAGE_DEPTH_M,
   SLIVER_FRACTION,
+  SQFT_TO_SQM,
 } from "./constants";
 
 /** A raw plot candidate before land-use allocation. */
@@ -33,15 +34,21 @@ export function generatePlotCandidates(
 ): PlotCandidate[] {
   const scale = DENSITY_PLOT_SCALE[controls.density];
   const maxDepth = FRONTAGE_DEPTH_M[controls.density];
-  const halfWidth = controls.roadWidthM / 2;
+  // plots sit behind the road edge, pushed back by the front setback
+  const offset = controls.roadWidthM / 2 + Math.max(0, controls.frontSetbackM);
+  const sideGap = Math.max(0, controls.sideSetbackM);
   const candidates: PlotCandidate[] = [];
 
   for (const road of roads) {
-    const targetArea =
-      (road.arterial ? controls.commercialPlotSqm : controls.residentialPlotSqm) *
-      scale;
+    // plot sizes are entered in square feet; convert to m² for the geometry
+    const targetSqft = road.arterial
+      ? controls.commercialPlotSqft
+      : controls.residentialPlotSqft;
+    const targetArea = targetSqft * SQFT_TO_SQM * scale;
     const depth = Math.min(maxDepth, Math.max(14, Math.sqrt(targetArea) * 1.3));
-    const width = Math.max(8, targetArea / depth);
+    const stride = Math.max(8, targetArea / depth);
+    // each plot is narrower than the stride by the side setback (gap between plots)
+    const plotWidth = Math.max(6, stride - sideGap);
 
     const coords = road.geometry.coordinates;
     for (let s = 0; s < coords.length - 1; s++) {
@@ -52,12 +59,12 @@ export function generatePlotCandidates(
       });
       if (segLen < 6) continue;
       const bearing = turf.bearing(turf.point(a), turf.point(b));
-      const n = Math.max(1, Math.floor(segLen / width));
+      const n = Math.max(1, Math.floor(segLen / stride));
       const step = segLen / n;
 
       for (let i = 0; i < n; i++) {
         for (const side of [1, -1] as const) {
-          const rect = makeRect(a, bearing, i * step, step, halfWidth, depth, side);
+          const rect = makeRect(a, bearing, i * step, plotWidth, offset, depth, side);
           if (!rect) continue;
           const ring = rect.geometry.coordinates[0];
           let inside = true;

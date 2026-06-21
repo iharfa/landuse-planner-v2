@@ -39,18 +39,20 @@ export default function Home() {
       </header>
 
       {/* left toolbar */}
-      <div className="absolute left-4 top-16 bottom-4 z-10 overflow-y-auto pr-1">
+      <div className="absolute left-4 top-16 z-10 max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
         <LeftToolbar />
       </div>
 
       {/* right controls */}
-      <div className="absolute right-4 top-16 bottom-4 z-10 overflow-y-auto pl-1">
+      <div className="absolute right-4 top-16 z-10 max-h-[calc(100vh-5rem)] overflow-y-auto pl-1">
         <RightControls />
       </div>
 
-      {/* bottom summary */}
-      <div className="absolute bottom-4 left-1/2 z-10 w-[min(900px,calc(100vw-580px))] -translate-x-1/2">
-        <SummaryPanel />
+      {/* bottom summary — kept strictly between the two sidebars */}
+      <div className="pointer-events-none absolute bottom-4 left-[288px] right-[320px] z-10">
+        <div className="pointer-events-auto mx-auto max-w-4xl">
+          <SummaryPanel />
+        </div>
       </div>
 
       <Toasts />

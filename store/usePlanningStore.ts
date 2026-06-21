@@ -291,7 +291,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       parcels: s.parcels,
       roads: s.roads,
       features: s.features,
-      controls: s.controls,
+      // merge with defaults so scenarios saved by older versions still work
+      controls: { ...DEFAULT_CONTROLS, ...s.controls },
       mapCenter: s.mapCenter,
       mapZoom: s.mapZoom,
       summary: null,

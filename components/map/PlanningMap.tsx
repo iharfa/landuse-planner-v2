@@ -186,6 +186,20 @@ export function PlanningMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [features, boundary, parcels, roads, selectedId, layerVisible, ready]);
 
+  // --- overlay opacity ---
+  const overlayOpacity = usePlanningStore((s) => s.controls.overlayOpacity);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !map.getLayer("ils-features-fill")) return;
+    map.setPaintProperty("ils-features-fill", "fill-opacity", [
+      "case",
+      ["==", ["get", "landUse"], "unassigned"],
+      overlayOpacity * 0.3,
+      overlayOpacity,
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpacity, ready]);
+
   // --- basemap switching ---
   const basemap = usePlanningStore((s) => s.basemap);
   useEffect(() => {
@@ -271,11 +285,16 @@ function addOverlayLayers(map: maplibregl.Map) {
       type: "symbol",
       source: SRC_FEATURES,
       filter: ["!=", ["get", "label"], ""],
+      minzoom: 13,
       layout: {
         "text-field": ["get", "label"],
         "text-font": ["Noto Sans Regular"],
         "text-size": 11,
         "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "text-optional": true,
+        "text-padding": 8,
+        "text-max-width": 8,
       },
       paint: {
         "text-color": "#f8fafc",
