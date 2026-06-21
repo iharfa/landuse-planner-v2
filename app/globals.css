@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: #0b1220;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Thin scrollbars for dark panels */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* MapLibre attribution toned down for the dark theme */
+.maplibregl-ctrl-attrib {
+  background: rgba(15, 23, 42, 0.7) !important;
+  color: #94a3b8 !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #cbd5e1 !important;
+}
