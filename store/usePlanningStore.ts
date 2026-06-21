@@ -59,6 +59,7 @@ interface PlanningState {
   mapCenter: [number, number];
   mapZoom: number;
   layerVisible: Record<LandUseType, boolean>;
+  autoGenerate: boolean;
   toasts: Toast[];
 
   // setters
@@ -79,8 +80,9 @@ interface PlanningState {
 
   // generation
   generate: () => void;
-  regenerateUnlocked: () => void;
+  regenerateUnlocked: (silent?: boolean) => void;
   clearGenerated: () => void;
+  setAutoGenerate: (v: boolean) => void;
 
   // feature editing
   changeLandUse: (id: string, use: LandUseType) => void;
@@ -129,6 +131,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   mapCenter: MALDIVES_CENTER,
   mapZoom: DEFAULT_ZOOM,
   layerVisible: { ...allLayersVisible },
+  autoGenerate: true,
   toasts: [],
 
   setProjectName: (name) => set({ projectName: name }),
@@ -222,7 +225,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     else get().pushToast("Layout generated.", "success");
   },
 
-  regenerateUnlocked: () => {
+  regenerateUnlocked: (silent = false) => {
     const { boundary, parcels, roads, controls, features } = get();
     const lockedFeatures = features.filter((f) => f.locked);
     const { features: next, summary } = generateLayout({
@@ -233,8 +236,10 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       lockedFeatures,
     });
     set({ features: next, summary, selectedId: null });
-    get().pushToast("Regenerated unlocked areas.", "success");
+    if (!silent) get().pushToast("Regenerated unlocked areas.", "success");
   },
+
+  setAutoGenerate: (v) => set({ autoGenerate: v }),
 
   clearGenerated: () => {
     set({

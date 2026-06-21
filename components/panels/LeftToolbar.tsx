@@ -14,6 +14,8 @@ import {
   Combine,
   Grid3x3,
   Eraser,
+  PenTool,
+  Circle,
 } from "lucide-react";
 import type { DrawMode } from "@/lib/types";
 import { FeatureEditor } from "./FeatureEditor";
@@ -101,6 +103,20 @@ export function LeftToolbar() {
             label="Road"
           />
           <ToolButton
+            mode="curve"
+            active={drawMode === "curve"}
+            onClick={toggle}
+            icon={<PenTool className="h-4 w-4" />}
+            label="Curve"
+          />
+          <ToolButton
+            mode="ring"
+            active={drawMode === "ring"}
+            onClick={toggle}
+            icon={<Circle className="h-4 w-4" />}
+            label="Ring"
+          />
+          <ToolButton
             mode="select"
             active={drawMode === "select"}
             onClick={toggle}
@@ -123,6 +139,10 @@ export function LeftToolbar() {
               "Draw an internal parcel inside the boundary. Double-click to finish."}
             {drawMode === "road" &&
               "Click to sketch a road centerline. Double-click to finish."}
+            {drawMode === "curve" &&
+              "Click and drag to draw a freehand curved or arched road."}
+            {drawMode === "ring" &&
+              "Click and drag to draw a circular ring road. Plots fill inside and outside."}
             {drawMode === "select" && "Click any generated feature to edit it."}
             {drawMode === "merge" &&
               "Select a feature, then click an adjacent one to merge them."}

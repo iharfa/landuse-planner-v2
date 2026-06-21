@@ -56,6 +56,8 @@ export interface PlanningControls {
   residentialPlotSqft: number;
   /** commercial plot size in square feet */
   commercialPlotSqft: number;
+  /** force at least this many residential plots when land allows */
+  minResidentialPlots: number;
   roadWidthM: number;
   /** front setback from the road edge, in metres */
   frontSetbackM: number;
@@ -115,6 +117,8 @@ export type DrawMode =
   | "boundary"
   | "parcel"
   | "road"
+  | "curve"
+  | "ring"
   | "select"
   | "merge";
 
@@ -125,6 +129,7 @@ export const DEFAULT_CONTROLS: PlanningControls = {
   greenPct: 12,
   residentialPlotSqft: 2000,
   commercialPlotSqft: 8000,
+  minResidentialPlots: 0,
   roadWidthM: 12,
   frontSetbackM: 3,
   sideSetbackM: 1.5,

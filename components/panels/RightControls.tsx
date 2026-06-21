@@ -16,10 +16,18 @@ import type { DensityLevel, WalkabilityTarget } from "@/lib/types";
 export function RightControls() {
   const controls = usePlanningStore((s) => s.controls);
   const setControls = usePlanningStore((s) => s.setControls);
+  const autoGenerate = usePlanningStore((s) => s.autoGenerate);
+  const setAutoGenerate = usePlanningStore((s) => s.setAutoGenerate);
 
   return (
     <div className="flex flex-col gap-3 w-72">
       <Panel title="Planning controls" icon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
+        <Toggle
+          label="Auto-generate on change"
+          checked={autoGenerate}
+          onChange={setAutoGenerate}
+        />
+        <div className="h-px bg-white/10" />
         <LabeledSlider
           label="Residential"
           value={controls.residentialPct}
@@ -70,6 +78,14 @@ export function RightControls() {
           step={250}
           suffix=" sqft"
           onChange={(v) => setControls({ commercialPlotSqft: v })}
+        />
+        <LabeledNumber
+          label="Min. residential plots"
+          value={controls.minResidentialPlots}
+          min={0}
+          max={5000}
+          step={10}
+          onChange={(v) => setControls({ minResidentialPlots: v })}
         />
         <LabeledNumber
           label="Road width"

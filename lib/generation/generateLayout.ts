@@ -152,9 +152,12 @@ export function generateLayout(input: GenerationInput): GenerationResult {
   const remaining = [...withDist]
     .filter(({ c }) => !used.has(c))
     .sort((a, b) => a.dist - b.dist);
+  const minResidential = Math.max(0, controls.minResidentialPlots);
   for (const { c } of remaining) {
     used.add(c);
-    if (resArea < resTarget) {
+    // keep filling residential until the area target is met OR we reach the
+    // requested minimum plot count, whichever needs more land
+    if (resArea < resTarget || residentialPool.length < minResidential) {
       resArea += c.areaSqm;
       const pf = toPlanning(c, "residential");
       residentialPool.push(pf);
@@ -189,6 +192,8 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     for (let k = 0; k < count; k++) {
       // never consume more than ~40% of the residential pool on facilities
       if (consumed.size >= residentialPool.length * 0.4) break;
+      // and never drop the residential count below the requested minimum
+      if (residentialPool.length - consumed.size <= minResidential) break;
       const pool = residentialPool.filter((p) => !consumed.has(p.id));
       if (pool.length === 0) break;
       // nearest residential plots to the anchor, accumulate to target area
@@ -306,6 +311,7 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     resTarget,
     comArea,
     comTarget,
+    minResidential,
   });
 
   return { features, summary };
@@ -396,6 +402,7 @@ interface SummaryInput {
   resTarget: number;
   comArea: number;
   comTarget: number;
+  minResidential: number;
 }
 
 function buildSummary(i: SummaryInput): ScenarioSummary {
@@ -427,6 +434,11 @@ function buildSummary(i: SummaryInput): ScenarioSummary {
     addW("warning", "Road area too high relative to buildable land.");
   if (estimatedPopulation < i.controls.population * 0.6)
     addW("warning", "Not enough land for the selected population target.");
+  if (i.minResidential > 0 && residentialPlots < i.minResidential)
+    addW(
+      "warning",
+      `Only ${residentialPlots} of ${i.minResidential} minimum residential plots could be placed.`,
+    );
   if (plotsWithoutAccess > 0)
     addW("warning", "Some plots lack road access.");
 

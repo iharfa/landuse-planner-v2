@@ -7,6 +7,8 @@ import {
   TerraDraw,
   TerraDrawPolygonMode,
   TerraDrawLineStringMode,
+  TerraDrawFreehandLineStringMode,
+  TerraDrawCircleMode,
 } from "terra-draw";
 import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -92,6 +94,9 @@ export function PlanningMap() {
       modes: [
         new TerraDrawPolygonMode(),
         new TerraDrawLineStringMode(),
+        // freehand line → curved/arched roads; circle → ring roads
+        new TerraDrawFreehandLineStringMode(),
+        new TerraDrawCircleMode(),
       ],
     });
     draw.start();
@@ -107,7 +112,16 @@ export function PlanningMap() {
         store.getState().addBoundary(geom);
       } else if (geom.type === "Polygon" && dm === "parcel") {
         store.getState().addParcel(geom);
-      } else if (geom.type === "LineString" && dm === "road") {
+      } else if (geom.type === "Polygon" && dm === "ring") {
+        // a circle's perimeter becomes a ring-road centerline
+        store.getState().addRoad({
+          type: "LineString",
+          coordinates: geom.coordinates[0],
+        });
+      } else if (
+        geom.type === "LineString" &&
+        (dm === "road" || dm === "curve")
+      ) {
         store.getState().addRoad(geom);
       }
       // clear terra-draw scratch geometry; our own layers render the result
@@ -124,6 +138,10 @@ export function PlanningMap() {
       draw.setMode("polygon");
     } else if (drawMode === "road") {
       draw.setMode("linestring");
+    } else if (drawMode === "curve") {
+      draw.setMode("freehand-linestring");
+    } else if (drawMode === "ring") {
+      draw.setMode("circle");
     } else {
       // idle / select / merge: terra-draw stays inactive
       draw.clear();

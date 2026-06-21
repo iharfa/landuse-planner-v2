@@ -6,6 +6,7 @@ import { LeftToolbar } from "@/components/panels/LeftToolbar";
 import { RightControls } from "@/components/panels/RightControls";
 import { SummaryPanel } from "@/components/panels/SummaryPanel";
 import { WelcomePanel } from "@/components/panels/WelcomePanel";
+import { AutoGenerator } from "@/components/panels/AutoGenerator";
 import { Toasts } from "@/components/ui/Toasts";
 import { Compass, Info } from "lucide-react";
 
@@ -19,6 +20,7 @@ export default function Home() {
   return (
     <main className="relative h-screen w-screen overflow-hidden">
       <PlanningMap />
+      <AutoGenerator />
       <WelcomePanel />
 
       {/* top bar */}
