@@ -22,6 +22,7 @@ import { validateInputs } from "./validation";
 import { buildRoadGeometry } from "./roads";
 import { generatePlotCandidates, type PlotCandidate } from "./plots";
 import { computeFacilityPlan } from "./facilities";
+import { optimizeAndScore, type CompatibilityScores } from "./optimize";
 import {
   PERSONS_PER_RESIDENTIAL_PLOT,
   FACILITY_RULES,
@@ -120,11 +121,20 @@ export function generateLayout(input: GenerationInput): GenerationResult {
   const assigned: PlanningFeature[] = [];
   const used = new Set<PlotCandidate>();
 
-  // Industrial: farthest-from-center, non-arterial preferred.
+  // Industrial: grow a single contiguous cluster from the plot farthest from
+  // the centre (a corner). Clustering — rather than ringing the whole edge —
+  // minimises the industrial/residential border and so the compatibility
+  // violations the optimizer would otherwise have to fix.
   let indArea = 0;
-  if (indTarget > 0) {
-    const farFirst = [...withDist].sort((a, b) => b.dist - a.dist);
-    for (const { c } of farFirst) {
+  if (indTarget > 0 && withDist.length > 0) {
+    const seed = withDist.reduce((m, x) => (x.dist > m.dist ? x : m), withDist[0]);
+    const seedPt = turf.point(seed.c.centroid);
+    const nearSeed = [...withDist].sort(
+      (a, b) =>
+        turf.distance(turf.point(a.c.centroid), seedPt, { units: "meters" }) -
+        turf.distance(turf.point(b.c.centroid), seedPt, { units: "meters" }),
+    );
+    for (const { c } of nearSeed) {
       if (indArea >= indTarget) break;
       if (used.has(c)) continue;
       used.add(c);
@@ -296,6 +306,16 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     ...greenFeatures,
   ];
 
+  // --- Compatibility optimization (thesis-style) ---
+  // Improve land-use placement against the dependency matrix + radius of
+  // influence, then report compatibility %, diversity and violation scores.
+  // This mutates land-use labels in place (counts preserved, locks respected).
+  const scores = optimizeAndScore(
+    features,
+    controls.walkability,
+    controls.optimizeCompatibility,
+  );
+
   // --- Step 7: summary + warnings ---
   const summary = buildSummary({
     boundary,
@@ -312,6 +332,7 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     comArea,
     comTarget,
     minResidential,
+    scores,
   });
 
   return { features, summary };
@@ -384,6 +405,9 @@ function emptySummary(
     estimatedPopulation: 0,
     schools: 0,
     mosques: 0,
+    compatibilityPct: 0,
+    diversityScore: 0,
+    violations: 0,
     warnings,
   };
 }
@@ -403,6 +427,7 @@ interface SummaryInput {
   comArea: number;
   comTarget: number;
   minResidential: number;
+  scores: CompatibilityScores;
 }
 
 function buildSummary(i: SummaryInput): ScenarioSummary {
@@ -441,6 +466,13 @@ function buildSummary(i: SummaryInput): ScenarioSummary {
     );
   if (plotsWithoutAccess > 0)
     addW("warning", "Some plots lack road access.");
+  if (i.scores.violations > 0)
+    addW(
+      "info",
+      `${i.scores.violations} compatibility violation${
+        i.scores.violations === 1 ? "" : "s"
+      } (e.g. industrial near residential/schools).`,
+    );
 
   return {
     boundaryAreaSqm: i.boundary.areaSqm,
@@ -456,6 +488,9 @@ function buildSummary(i: SummaryInput): ScenarioSummary {
     estimatedPopulation,
     schools: countBy("school"),
     mosques: countBy("mosque"),
+    compatibilityPct: i.scores.compatibilityPct,
+    diversityScore: i.scores.diversityScore,
+    violations: i.scores.violations,
     warnings,
   };
 }

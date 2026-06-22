@@ -72,6 +72,8 @@ export interface PlanningControls {
   mosques: boolean;
   utilities: boolean;
   recreation: boolean;
+  /** run the compatibility optimizer after allocation */
+  optimizeCompatibility: boolean;
 }
 
 export interface GenerationWarning {
@@ -94,6 +96,10 @@ export interface ScenarioSummary {
   estimatedPopulation: number;
   schools: number;
   mosques: number;
+  /** compatibility / diversity / violation scores (thesis-style evaluation) */
+  compatibilityPct: number;
+  diversityScore: number;
+  violations: number;
   warnings: GenerationWarning[];
 }
 
@@ -141,4 +147,5 @@ export const DEFAULT_CONTROLS: PlanningControls = {
   mosques: true,
   utilities: true,
   recreation: true,
+  optimizeCompatibility: true,
 };

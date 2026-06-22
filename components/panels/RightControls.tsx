@@ -27,6 +27,11 @@ export function RightControls() {
           checked={autoGenerate}
           onChange={setAutoGenerate}
         />
+        <Toggle
+          label="Optimize compatibility"
+          checked={controls.optimizeCompatibility}
+          onChange={(v) => setControls({ optimizeCompatibility: v })}
+        />
         <div className="h-px bg-white/10" />
         <LabeledSlider
           label="Residential"
