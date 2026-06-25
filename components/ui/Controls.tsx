@@ -1,6 +1,47 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
+/** A Panel whose body can be collapsed/expanded by clicking the header. */
+export function CollapsiblePanel({
+  title,
+  icon,
+  children,
+  defaultOpen = false,
+  className = "",
+}: {
+  title: string;
+  icon?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div
+      className={`rounded-xl border border-white/10 bg-slate-900/70 backdrop-blur-md shadow-lg ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:text-cyan-200"
+      >
+        {icon}
+        <span className="flex-1 text-left">{title}</span>
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-white/10 p-3">{children}</div>
+      )}
+    </div>
+  );
+}
 
 export function Panel({
   title,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePlanningStore } from "@/store/usePlanningStore";
 import {
   Panel,
+  CollapsiblePanel,
   Button,
   LabeledNumber,
   SegmentedControl,
@@ -292,7 +293,7 @@ export function LeftToolbar() {
         <RoadDraftControls />
       )}
 
-      <Panel title="Road network">
+      <CollapsiblePanel title="Road network">
         <div className="grid grid-cols-2 gap-2">
           <LabeledNumber
             label="Block spacing"
@@ -327,7 +328,7 @@ export function LeftToolbar() {
           Drawn roads snap to nearby roads so they connect. A grid gives every
           block road frontage on all sides.
         </p>
-      </Panel>
+      </CollapsiblePanel>
 
       <Panel title="Generate">
         <Button variant="primary" onClick={generate} disabled={!boundary}>
