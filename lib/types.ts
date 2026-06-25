@@ -111,6 +111,10 @@ export interface PlanningControls {
   sideSetbackM: number;
   /** opacity of the land-use overlay over the basemap (0.1–0.9) */
   overlayOpacity: number;
+  /** width of green verges along roads / edges, in metres (0 disables) */
+  greenBufferWidthM: number;
+  /** leftover green areas at least this large are designated parks, in m² */
+  minParkAreaSqm: number;
   density: DensityLevel;
   walkability: WalkabilityTarget;
   population: number;
@@ -186,6 +190,8 @@ export const DEFAULT_CONTROLS: PlanningControls = {
   frontSetbackM: 3,
   sideSetbackM: 1.5,
   overlayOpacity: 0.55,
+  greenBufferWidthM: 2,
+  minParkAreaSqm: 2000,
   density: "medium",
   walkability: 400,
   population: 5000,

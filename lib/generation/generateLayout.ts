@@ -13,6 +13,8 @@ import {
   safeUnion,
   safeIntersect,
   safeDifference,
+  safeBuffer,
+  booleanOverlapOrTouch,
   polygonArea,
   explodePolygons,
   makeId,
@@ -108,6 +110,12 @@ export function generateLayout(input: GenerationInput): GenerationResult {
   let developable = buildable;
   if (roadGeom.roadPolygon) {
     const diff = safeDifference(buildable, roadGeom.roadPolygon);
+    if (diff) developable = diff;
+  }
+  // Reserve the green verge along roads: removing it from developable keeps
+  // plots off it, leaving a green street edge between road and buildings.
+  if (roadGeom.vergeBand) {
+    const diff = safeDifference(developable, roadGeom.vergeBand);
     if (diff) developable = diff;
   }
   const developableArea = polygonArea(developable.geometry);
@@ -296,13 +304,19 @@ export function generateLayout(input: GenerationInput): GenerationResult {
 
   const greenFeatures: PlanningFeature[] = [];
   let greenArea = 0;
+  const minParkArea = Math.max(0, controls.minParkAreaSqm ?? 0);
   if (leftover) {
     const chunks = explodePolygons(leftover)
       .map((poly) => ({ poly, area: polygonArea(poly.geometry) }))
       .filter((c) => c.area > 20)
       .sort((a, b) => b.area - a.area);
     for (const { poly, area } of chunks) {
-      const use: LandUseType = greenArea < greenTarget ? "green" : "unassigned";
+      // Large open areas always become parks (ample green), regardless of the
+      // green-space budget. Smaller leftovers fill green up to the target, then
+      // remain unassigned.
+      const isPark = minParkArea > 0 && area >= minParkArea;
+      const use: LandUseType =
+        isPark || greenArea < greenTarget ? "green" : "unassigned";
       if (use === "green") greenArea += area;
       greenFeatures.push({
         id: makeId(use),
@@ -311,19 +325,51 @@ export function generateLayout(input: GenerationInput): GenerationResult {
         areaSqm: area,
         locked: false,
         generated: true,
+        label: isPark ? "Park" : undefined,
       });
     }
   }
 
+  // --- Green structuring: verges along roads + buffers around facilities ---
+  // Verge strips reserved earlier become green street edges.
+  const vergeFeatures: PlanningFeature[] = explodePolygons(roadGeom.vergeBand)
+    .map((poly) => ({ poly, area: polygonArea(poly.geometry) }))
+    .filter((c) => c.area > 2)
+    .map(({ poly, area }) => ({
+      id: makeId("verge"),
+      landUse: "green" as LandUseType,
+      geometry: poly.geometry,
+      areaSqm: area,
+      locked: false,
+      generated: true,
+      label: undefined,
+    }));
+
   // --- Assemble all features ---
-  const features: PlanningFeature[] = [
+  let features: PlanningFeature[] = [
     ...lockedFeatures,
     ...roadGeom.roadFeatures,
     ...otherAssigned,
     ...finalResidential.filter((p) => !otherAssigned.includes(p)),
     ...facilityFeatures,
+    ...vergeFeatures,
     ...greenFeatures,
   ];
+
+  // Green ring around schools & mosques, carved out of the plots it overlaps.
+  const facilityBufferM = (controls.greenBufferWidthM ?? 0) * 2;
+  if (facilityBufferM > 0) {
+    const rings = facilityFeatures
+      .filter((f) => f.landUse === "school" || f.landUse === "mosque")
+      .map((f) => {
+        const buf = safeBuffer(toFeature(f.geometry), facilityBufferM);
+        return buf ? safeDifference(buf, toFeature(f.geometry)) : null;
+      })
+      .filter(Boolean) as Feature<Polygon | MultiPolygon>[];
+    let facilityZone = safeUnion(rings);
+    if (facilityZone) facilityZone = safeIntersect(facilityZone, developable) ?? null;
+    if (facilityZone) features = carveGreenZone(features, facilityZone);
+  }
 
   // --- Compatibility optimization (thesis-style) ---
   // Improve land-use placement against the dependency matrix + radius of
@@ -358,6 +404,60 @@ export function generateLayout(input: GenerationInput): GenerationResult {
 }
 
 // ---------- helpers ----------
+
+/** Land uses whose plots may be carved to make room for green zones. */
+const CARVEABLE: ReadonlySet<LandUseType> = new Set([
+  "residential",
+  "commercial",
+  "industrial",
+  "unassigned",
+]);
+
+/**
+ * Carve `zone` out of every carveable, generated plot it overlaps: the
+ * overlap becomes green and the remainder keeps the plot's land use. Roads,
+ * facilities, locked features and existing green are left untouched.
+ */
+function carveGreenZone(
+  features: PlanningFeature[],
+  zone: Feature<Polygon | MultiPolygon>,
+): PlanningFeature[] {
+  const kept: PlanningFeature[] = [];
+  const greens: PlanningFeature[] = [];
+  for (const f of features) {
+    const carveable =
+      f.generated && !f.locked && CARVEABLE.has(f.landUse);
+    if (!carveable || !booleanOverlapOrTouch(toFeature(f.geometry), zone)) {
+      kept.push(f);
+      continue;
+    }
+    const inter = safeIntersect(toFeature(f.geometry), zone);
+    if (inter) {
+      for (const poly of explodePolygons(inter)) {
+        const area = polygonArea(poly.geometry);
+        if (area < 4) continue;
+        greens.push({
+          id: makeId("green"),
+          landUse: "green",
+          geometry: poly.geometry,
+          areaSqm: area,
+          locked: false,
+          generated: true,
+        });
+      }
+    }
+    const rest = safeDifference(toFeature(f.geometry), zone);
+    if (rest && polygonArea(rest.geometry) > 5) {
+      kept.push({
+        ...f,
+        geometry: rest.geometry,
+        areaSqm: polygonArea(rest.geometry),
+      });
+    }
+    // if nothing meaningful remains, the plot is fully replaced by green
+  }
+  return [...kept, ...greens];
+}
 
 function toPlanning(c: PlotCandidate, use: LandUseType): PlanningFeature {
   return {

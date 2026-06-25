@@ -5,6 +5,7 @@ import {
   safeBuffer,
   safeUnion,
   safeIntersect,
+  safeDifference,
   safeSimplify,
   polygonArea,
   makeId,
@@ -21,6 +22,8 @@ export interface RoadGeometry {
   roadPolygon: Feature<Polygon | MultiPolygon> | null;
   /** band on both sides of roads, used to place plots with frontage */
   frontageBand: Feature<Polygon | MultiPolygon> | null;
+  /** green verge ring hugging the roads (street greenery), clipped to land */
+  vergeBand: Feature<Polygon | MultiPolygon> | null;
   /** road surface as individual planning features (for editing) */
   roadFeatures: PlanningFeature[];
   roadAreaSqm: number;
@@ -32,9 +35,11 @@ export function buildRoadGeometry(
   controls: PlanningControls,
 ): RoadGeometry {
   const frontageDepth = FRONTAGE_DEPTH_M[controls.density];
+  const vergeWidth = Math.max(0, controls.greenBufferWidthM ?? 0);
 
   const roadBuffers: Feature<Polygon | MultiPolygon>[] = [];
   const bandBuffers: Feature<Polygon | MultiPolygon>[] = [];
+  const vergeBuffers: Feature<Polygon | MultiPolygon>[] = [];
 
   for (const road of roads) {
     // Each road carries its own width (from its class + lanes); fall back to the
@@ -45,6 +50,10 @@ export function buildRoadGeometry(
     if (rb) roadBuffers.push(rb);
     const band = safeBuffer(line, halfWidth + frontageDepth);
     if (band) bandBuffers.push(band);
+    if (vergeWidth > 0) {
+      const wide = safeBuffer(line, halfWidth + vergeWidth);
+      if (wide) vergeBuffers.push(wide);
+    }
   }
 
   let roadUnion = safeUnion(roadBuffers);
@@ -87,9 +96,21 @@ export function buildRoadGeometry(
   // Simplify the band once — it is the hot clip target for every plot rectangle.
   if (frontageBand) frontageBand = safeSimplify(frontageBand);
 
+  // Verge ring = (road buffered by verge width) − road surface, clipped to land.
+  let vergeBand: Feature<Polygon | MultiPolygon> | null = null;
+  if (vergeWidth > 0 && roadUnion) {
+    const wideUnion = safeUnion(vergeBuffers);
+    if (wideUnion) {
+      const clippedWide = safeIntersect(wideUnion, buildable) ?? wideUnion;
+      const ring = safeDifference(clippedWide, roadUnion);
+      if (ring) vergeBand = safeSimplify(ring);
+    }
+  }
+
   return {
     roadPolygon: roadUnion,
     frontageBand,
+    vergeBand,
     roadFeatures,
     roadAreaSqm: roadUnion ? polygonArea(roadUnion.geometry) : 0,
   };

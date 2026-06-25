@@ -66,6 +66,24 @@ export function RightControls() {
           suffix="%"
           onChange={(v) => setControls({ greenPct: v })}
         />
+        <LabeledSlider
+          label="Green verge width"
+          value={controls.greenBufferWidthM}
+          min={0}
+          max={8}
+          step={0.5}
+          suffix="m"
+          onChange={(v) => setControls({ greenBufferWidthM: v })}
+        />
+        <LabeledNumber
+          label="Min. park size"
+          value={controls.minParkAreaSqm}
+          min={0}
+          max={50000}
+          step={250}
+          suffix="m²"
+          onChange={(v) => setControls({ minParkAreaSqm: v })}
+        />
         <div className="h-px bg-white/10 my-1" />
         <LabeledSlider
           label="Residential plot size"
