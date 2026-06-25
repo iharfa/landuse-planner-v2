@@ -191,6 +191,33 @@ export function defaultPlotParams(
   };
 }
 
+/**
+ * Placeable facility presets (standard sporting arenas). Dimensions are the
+ * official playing area in metres (length = longer side). Placed blocks are
+ * recreation land use, so they count toward recreation provision.
+ */
+export interface SportsPreset {
+  id: string;
+  label: string;
+  lengthM: number;
+  widthM: number;
+}
+
+export const SPORTS_PRESETS: SportsPreset[] = [
+  { id: "football", label: "Football Pitch", lengthM: 105, widthM: 68 },
+  { id: "futsal", label: "Futsal Pitch", lengthM: 40, widthM: 20 },
+  { id: "basketball", label: "Basketball Court", lengthM: 28, widthM: 15 },
+  { id: "basketball-half", label: "Basketball Half Court", lengthM: 15, widthM: 14 },
+  { id: "netball", label: "Netball Court", lengthM: 30.5, widthM: 15.25 },
+  { id: "tennis", label: "Tennis Court", lengthM: 23.77, widthM: 10.97 },
+  { id: "volleyball", label: "Volleyball Court", lengthM: 18, widthM: 9 },
+  { id: "badminton", label: "Badminton Court", lengthM: 13.4, widthM: 6.1 },
+];
+
+export function findSportsPreset(id: string): SportsPreset | undefined {
+  return SPORTS_PRESETS.find((p) => p.id === id);
+}
+
 /** Order shown in the legend. */
 export const LEGEND_ORDER: LandUseType[] = [
   "residential",

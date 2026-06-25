@@ -176,7 +176,8 @@ export type DrawMode =
   | "curve"
   | "ring"
   | "select"
-  | "merge";
+  | "merge"
+  | "place";
 
 export const DEFAULT_CONTROLS: PlanningControls = {
   residentialPct: 55,

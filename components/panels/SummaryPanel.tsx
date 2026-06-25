@@ -8,6 +8,19 @@ import { useState } from "react";
 export function SummaryPanel() {
   const summary = usePlanningStore((s) => s.summary);
   const boundary = usePlanningStore((s) => s.boundary);
+  // Live recreation totals include placed sports lots (non-generated), which the
+  // generator's summary doesn't see.
+  const recreationAreaSqm = usePlanningStore((s) =>
+    s.features
+      .filter((f) => f.landUse === "recreation")
+      .reduce((a, f) => a + f.areaSqm, 0),
+  );
+  const sportsLots = usePlanningStore(
+    (s) =>
+      s.features.filter(
+        (f) => f.landUse === "recreation" && f.subtype && !f.generated,
+      ).length,
+  );
   const [open, setOpen] = useState(true);
 
   if (!summary && !boundary) return null;
@@ -21,7 +34,8 @@ export function SummaryPanel() {
         { label: "Commercial", value: formatArea(summary.commercialAreaSqm) },
         { label: "Industrial", value: formatArea(summary.industrialAreaSqm) },
         { label: "Green space", value: formatArea(summary.greenAreaSqm) },
-        { label: "Recreation", value: formatArea(summary.recreationAreaSqm) },
+        { label: "Recreation", value: formatArea(recreationAreaSqm) },
+        { label: "Sports lots", value: String(sportsLots) },
         { label: "Residential plots", value: String(summary.residentialPlots) },
         { label: "Commercial plots", value: String(summary.commercialPlots) },
         { label: "Est. population", value: summary.estimatedPopulation.toLocaleString() },

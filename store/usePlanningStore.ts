@@ -28,8 +28,10 @@ import {
   lineLength,
   snapLineEndpoints,
   safeUnion,
+  orientedRectMeters,
   turf,
 } from "@/lib/geometry/turfHelpers";
+import { findSportsPreset } from "@/lib/generation/constants";
 import { generateRoadGrid } from "@/lib/generation/roadGrid";
 import type { Polygon, MultiPolygon } from "geojson";
 
@@ -64,6 +66,10 @@ interface PlanningState {
 
   drawMode: DrawMode;
   selectedId: string | null;
+  /** id of the facility preset to stamp in "place" mode (null = none) */
+  placementPreset: string | null;
+  /** rotation (deg) applied to placed facility blocks */
+  placementRotation: number;
   /** land use applied to the next parcel drawn */
   parcelDraftUse: LandUseType;
   /** class / lanes applied to the next road drawn */
@@ -82,6 +88,9 @@ interface PlanningState {
   setSelected: (id: string | null) => void;
   setParcelDraftUse: (use: LandUseType) => void;
   setRoadDraft: (patch: Partial<{ roadClass: RoadClass; lanes: number; widthM: number }>) => void;
+  selectPlacement: (presetId: string | null) => void;
+  setPlacementRotation: (deg: number) => void;
+  placeFacility: (at: [number, number]) => void;
   setBasemap: (id: BasemapId) => void;
   setMapView: (center: [number, number], zoom: number) => void;
   toggleLayer: (use: LandUseType) => void;
@@ -159,6 +168,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   summary: null,
   drawMode: "none",
   selectedId: null,
+  placementPreset: null,
+  placementRotation: 0,
   parcelDraftUse: "residential",
   roadDraft: { roadClass: "main", lanes: 4, widthM: computeRoadWidth("main", 4) },
   basemap: "satellite",
@@ -185,6 +196,44 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       next.widthM = computeRoadWidth(next.roadClass, next.lanes);
     }
     set({ roadDraft: next });
+  },
+
+  selectPlacement: (presetId) =>
+    set({
+      placementPreset: presetId,
+      drawMode: presetId ? "place" : "none",
+      selectedId: null,
+    }),
+
+  setPlacementRotation: (deg) => set({ placementRotation: deg }),
+
+  placeFacility: (at) => {
+    const preset = findSportsPreset(get().placementPreset ?? "");
+    if (!preset) return;
+    const geometry = orientedRectMeters(
+      at,
+      preset.lengthM,
+      preset.widthM,
+      get().placementRotation,
+    );
+    const feature: PlanningFeature = {
+      id: makeId("sport"),
+      landUse: "recreation",
+      geometry,
+      areaSqm: polygonArea(geometry),
+      locked: false,
+      generated: false,
+      subtype: preset.id,
+      label: preset.label,
+    };
+    set({ features: [...get().features, feature] });
+    const boundary = get().boundary;
+    if (
+      boundary &&
+      !turf.booleanPointInPolygon(turf.point(at), turf.polygon(boundary.geometry.coordinates))
+    ) {
+      get().pushToast(`${preset.label} placed (outside the boundary).`, "info");
+    }
   },
   setBasemap: (id) => set({ basemap: id }),
   setMapView: (center, zoom) => set({ mapCenter: center, mapZoom: zoom }),

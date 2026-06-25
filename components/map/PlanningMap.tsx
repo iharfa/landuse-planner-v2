@@ -68,6 +68,10 @@ export function PlanningMap() {
     map.on("click", (e) => {
       const st = store.getState();
       const dm = st.drawMode;
+      if (dm === "place") {
+        st.placeFacility([e.lngLat.lng, e.lngLat.lat]);
+        return;
+      }
       if (dm !== "none" && dm !== "select" && dm !== "merge") return;
 
       // generated features take click priority, then parcels, then roads.

@@ -163,6 +163,40 @@ export function explodePolygons(
   return g.coordinates.map((coords) => turf.polygon(coords));
 }
 
+/**
+ * Build an axis-or-rotated rectangle of `lengthM` × `widthM` (metres) centred
+ * on `center` [lng, lat]. `rotationDeg` rotates it clockwise from east. Used to
+ * place standard facility footprints (sports arenas) at a clicked point.
+ */
+export function orientedRectMeters(
+  center: Position,
+  lengthM: number,
+  widthM: number,
+  rotationDeg = 0,
+): Polygon {
+  const [lng0, lat0] = center;
+  const mPerDegLng = 111320 * Math.cos((lat0 * Math.PI) / 180);
+  const mPerDegLat = 110540;
+  const hl = lengthM / 2;
+  const hw = widthM / 2;
+  const corners: [number, number][] = [
+    [-hl, -hw],
+    [hl, -hw],
+    [hl, hw],
+    [-hl, hw],
+  ];
+  const th = (rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(th);
+  const sin = Math.sin(th);
+  const ring: Position[] = corners.map(([x, y]) => {
+    const rx = x * cos - y * sin;
+    const ry = x * sin + y * cos;
+    return [lng0 + rx / mPerDegLng, lat0 + ry / mPerDegLat];
+  });
+  ring.push(ring[0]);
+  return { type: "Polygon", coordinates: [ring] };
+}
+
 /** Centroid position [lng, lat] of a polygon. */
 export function centroidOf(geom: Polygon): Position {
   try {

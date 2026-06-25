@@ -7,6 +7,7 @@ import {
   CollapsiblePanel,
   Button,
   LabeledNumber,
+  LabeledSlider,
   SegmentedControl,
 } from "@/components/ui/Controls";
 import {
@@ -31,6 +32,7 @@ import {
   LAND_USE_LABELS,
   ROAD_CLASS_DEFAULTS,
   ROAD_CLASS_ORDER,
+  SPORTS_PRESETS,
 } from "@/lib/generation/constants";
 import { FeatureEditor } from "./FeatureEditor";
 
@@ -146,6 +148,65 @@ function RoadDraftControls() {
         to the existing network as you draw.
       </p>
     </Panel>
+  );
+}
+
+/** Palette of standard sporting arenas you can stamp onto the map. */
+function SportsPalette() {
+  const drawMode = usePlanningStore((s) => s.drawMode);
+  const placementPreset = usePlanningStore((s) => s.placementPreset);
+  const selectPlacement = usePlanningStore((s) => s.selectPlacement);
+  const rotation = usePlanningStore((s) => s.placementRotation);
+  const setRotation = usePlanningStore((s) => s.setPlacementRotation);
+  const placing = drawMode === "place";
+  const active = SPORTS_PRESETS.find((p) => p.id === placementPreset);
+
+  return (
+    <CollapsiblePanel title="Sports & facilities">
+      <div className="grid grid-cols-2 gap-2">
+        {SPORTS_PRESETS.map((p) => {
+          const on = placing && placementPreset === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => selectPlacement(on ? null : p.id)}
+              title={`${p.label} — ${p.lengthM} × ${p.widthM} m`}
+              className={`flex flex-col items-start gap-0.5 rounded-lg border px-2 py-1.5 text-left text-[11px] transition-colors ${
+                on
+                  ? "border-cyan-400 bg-cyan-500/20 text-cyan-200"
+                  : "border-white/10 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
+              }`}
+            >
+              <span className="font-medium leading-tight">{p.label}</span>
+              <span className="text-[10px] text-slate-400">
+                {p.lengthM} × {p.widthM} m
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <LabeledSlider
+        label="Rotation"
+        value={rotation}
+        min={0}
+        max={180}
+        step={5}
+        suffix="°"
+        onChange={setRotation}
+      />
+      {placing && active ? (
+        <p className="text-[11px] text-cyan-300/90 leading-snug">
+          Click on the map to place a {active.label}. Click the tile again to
+          stop placing.
+        </p>
+      ) : (
+        <p className="text-[10px] text-slate-500 leading-snug">
+          Pick an arena, then click to drop it. Placed lots are recreation
+          features — they count toward recreation, and you can change their use
+          or delete them with the Select tool.
+        </p>
+      )}
+    </CollapsiblePanel>
   );
 }
 
@@ -329,6 +390,8 @@ export function LeftToolbar() {
           block road frontage on all sides.
         </p>
       </CollapsiblePanel>
+
+      <SportsPalette />
 
       <Panel title="Generate">
         <Button variant="primary" onClick={generate} disabled={!boundary}>
