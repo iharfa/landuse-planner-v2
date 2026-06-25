@@ -125,6 +125,9 @@ interface PlanningState {
   clearGenerated: () => void;
   setAutoGenerate: (v: boolean) => void;
 
+  // selection
+  deleteSelected: () => void;
+
   // feature editing
   changeLandUse: (id: string, use: LandUseType) => void;
   toggleLock: (id: string) => void;
@@ -234,6 +237,19 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     ) {
       get().pushToast(`${preset.label} placed (outside the boundary).`, "info");
     }
+  },
+
+  deleteSelected: () => {
+    const id = get().selectedId;
+    if (!id) return;
+    if (get().features.some((f) => f.id === id)) {
+      get().deleteFeature(id);
+    } else if (get().parcels.some((p) => p.id === id)) {
+      get().deleteParcel(id);
+    } else if (get().roads.some((r) => r.id === id)) {
+      get().deleteRoad(id);
+    }
+    get().pushToast("Deleted selected item.", "info");
   },
   setBasemap: (id) => set({ basemap: id }),
   setMapView: (center, zoom) => set({ mapCenter: center, mapZoom: zoom }),

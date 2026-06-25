@@ -28,6 +28,61 @@ body {
   background: transparent;
 }
 
+/* Generate button: shining star + soft pulsing glow */
+@keyframes star-shine {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 0 0 rgba(250, 204, 21, 0));
+  }
+  50% {
+    transform: rotate(10deg) scale(1.18);
+    filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.95));
+  }
+}
+.animate-star-shine {
+  animation: star-shine 1.8s ease-in-out infinite;
+}
+
+@keyframes btn-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+  50% {
+    box-shadow: 0 0 16px 2px rgba(250, 204, 21, 0.4);
+  }
+}
+.animate-btn-glow {
+  animation: btn-glow 2.4s ease-in-out infinite;
+}
+
+/* Sweeping sheen across the generate button */
+@keyframes btn-sheen {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  60%,
+  100% {
+    transform: translateX(250%) skewX(-20deg);
+  }
+}
+.animate-btn-sheen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  animation: btn-sheen 3s ease-in-out infinite;
+}
+
 /* MapLibre attribution toned down for the dark theme */
 .maplibregl-ctrl-attrib {
   background: rgba(15, 23, 42, 0.7) !important;

@@ -15,7 +15,7 @@ import {
   Grid2x2,
   Spline,
   MousePointer2,
-  Sparkles,
+  Star,
   RefreshCw,
   Trash2,
   Combine,
@@ -393,10 +393,21 @@ export function LeftToolbar() {
 
       <SportsPalette />
 
-      <Panel title="Generate">
-        <Button variant="primary" onClick={generate} disabled={!boundary}>
-          <Sparkles className="h-4 w-4" /> Generate layout
-        </Button>
+      {/* standalone, animated Generate button */}
+      <button
+        type="button"
+        onClick={generate}
+        disabled={!boundary}
+        title={boundary ? "Generate the land-use layout" : "Draw a boundary first"}
+        className={`group relative w-full overflow-hidden flex items-center justify-center gap-2 rounded-xl border border-yellow-300/50 bg-gradient-to-br from-slate-800 to-slate-900 px-3 py-3 text-sm font-bold text-yellow-50 shadow-lg transition hover:from-slate-700 hover:to-slate-800 disabled:opacity-40 disabled:cursor-not-allowed ${
+          boundary ? "animate-btn-glow animate-btn-sheen" : ""
+        }`}
+      >
+        <Star className="h-5 w-5 text-yellow-300 fill-yellow-300 animate-star-shine" />
+        Generate layout
+      </button>
+
+      <Panel title="Regenerate">
         <Button onClick={regenerate} disabled={!hasGenerated}>
           <RefreshCw className="h-4 w-4" /> Regenerate unlocked
         </Button>

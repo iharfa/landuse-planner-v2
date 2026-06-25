@@ -297,6 +297,29 @@ export function PlanningMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basemap]);
 
+  // --- delete the selected feature/parcel/road with Delete or Backspace ---
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      )
+        return;
+      const st = store.getState();
+      if (!st.selectedId) return;
+      e.preventDefault();
+      st.deleteSelected();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full" id="map-capture-target" />
