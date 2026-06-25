@@ -14,6 +14,24 @@ export type LandUseType =
   | "unassigned"
   | "locked";
 
+/** How a subtype's plot size is specified. */
+export type ParcelSizing = "dimensions" | "area";
+
+/** Per-parcel subdivision settings (chosen subtype + editable plot sizing). */
+export interface ParcelPlotParams {
+  /** id of the chosen subtype within its land use (see PARCEL_SUBTYPES) */
+  subtypeId: string;
+  sizing: ParcelSizing;
+  /** plot frontage width in metres (sizing === "dimensions") */
+  widthM: number;
+  /** plot depth in metres (sizing === "dimensions") */
+  depthM: number;
+  /** target plot area in m² (sizing === "area") */
+  areaSqm: number;
+  /** gap / access spacing between adjacent plots, in metres */
+  gapM: number;
+}
+
 /** User-drawn main planning boundary. */
 export interface BoundaryFeature {
   id: string;
@@ -26,6 +44,8 @@ export interface BoundaryFeature {
    * parcel a fixed land-use zone that the generator preserves.
    */
   landUse?: LandUseType;
+  /** subtype + sizing used to subdivide this parcel into plots */
+  plotParams?: ParcelPlotParams;
 }
 
 /** Road hierarchy / type the user can designate per road. */
@@ -59,6 +79,10 @@ export interface PlanningFeature {
   /** true when produced by the generator (vs user roads/boundary) */
   generated: boolean;
   label?: string;
+  /** set when this feature is a plot subdivided from a parcel */
+  parcelId?: string;
+  /** subtype id this plot was generated from (e.g. "row-house") */
+  subtype?: string;
 }
 
 export type DensityLevel = "low" | "medium" | "high";

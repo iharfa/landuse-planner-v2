@@ -13,7 +13,14 @@ import type {
   LandUseType,
 } from "@/lib/types";
 import { DEFAULT_CONTROLS } from "@/lib/types";
-import { computeRoadWidth, ROAD_CLASS_DEFAULTS } from "@/lib/generation/constants";
+import {
+  computeRoadWidth,
+  ROAD_CLASS_DEFAULTS,
+  defaultPlotParams,
+  findSubtype,
+} from "@/lib/generation/constants";
+import { subdivideParcel as subdivideParcelGeom } from "@/lib/generation/subdivide";
+import type { ParcelPlotParams } from "@/lib/types";
 import { generateLayout } from "@/lib/generation/generateLayout";
 import {
   makeId,
@@ -89,6 +96,12 @@ interface PlanningState {
   changeParcelLandUse: (id: string, use: LandUseType) => void;
   deleteParcel: (id: string) => void;
   updateParcelGeometry: (id: string, geometry: BoundaryFeature["geometry"]) => void;
+
+  // parcel subdivision into plots
+  setParcelSubtype: (id: string, subtypeId: string) => void;
+  setParcelPlotParams: (id: string, patch: Partial<ParcelPlotParams>) => void;
+  subdivideParcel: (id: string) => void;
+  clearParcelPlots: (id: string) => void;
 
   // road editing
   setRoadClass: (id: string, roadClass: RoadClass) => void;
@@ -191,6 +204,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   addParcel: (geometry) => {
     const id = makeId("parcel");
+    const use = get().parcelDraftUse;
     set({
       parcels: [
         ...get().parcels,
@@ -199,7 +213,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
           kind: "parcel",
           geometry,
           areaSqm: polygonArea(geometry),
-          landUse: get().parcelDraftUse,
+          landUse: use,
+          plotParams: defaultPlotParams(use),
         },
       ],
       // select the new parcel so its use can be edited immediately
@@ -245,14 +260,21 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   changeParcelLandUse: (id, use) =>
     set({
+      // changing the use invalidates the subtype (subtypes are use-specific),
+      // so reset plot params to that use's default and drop any old plots
       parcels: get().parcels.map((p) =>
-        p.id === id ? { ...p, landUse: use } : p,
+        p.id === id
+          ? { ...p, landUse: use, plotParams: defaultPlotParams(use) }
+          : p,
       ),
+      features: get().features.filter((f) => f.parcelId !== id),
     }),
 
   deleteParcel: (id) =>
     set({
       parcels: get().parcels.filter((p) => p.id !== id),
+      // remove any plots subdivided from this parcel
+      features: get().features.filter((f) => f.parcelId !== id),
       selectedId: null,
     }),
 
@@ -264,6 +286,73 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
           : p,
       ),
     }),
+
+  setParcelSubtype: (id, subtypeId) =>
+    set({
+      parcels: get().parcels.map((p) =>
+        p.id === id
+          ? { ...p, plotParams: defaultPlotParams(p.landUse, subtypeId) }
+          : p,
+      ),
+    }),
+
+  setParcelPlotParams: (id, patch) =>
+    set({
+      parcels: get().parcels.map((p) => {
+        if (p.id !== id) return p;
+        const base = p.plotParams ?? defaultPlotParams(p.landUse);
+        if (!base) return p;
+        return { ...p, plotParams: { ...base, ...patch } };
+      }),
+    }),
+
+  subdivideParcel: (id) => {
+    const parcel = get().parcels.find((p) => p.id === id);
+    if (!parcel || !parcel.landUse) {
+      get().pushToast("Select a parcel with a land use first.", "error");
+      return;
+    }
+    const params = parcel.plotParams ?? defaultPlotParams(parcel.landUse);
+    if (!params) {
+      get().pushToast("This land use can’t be subdivided into plots.", "error");
+      return;
+    }
+    const { plots, truncated } = subdivideParcelGeom(parcel.geometry, params);
+    if (plots.length === 0) {
+      get().pushToast("No plots fit — try smaller plot sizes.", "error");
+      return;
+    }
+    const subtype = findSubtype(parcel.landUse, params.subtypeId);
+    const label = subtype?.label ?? "Plot";
+    const plotFeatures: PlanningFeature[] = plots.map((geometry) => ({
+      id: makeId("plot"),
+      landUse: parcel.landUse as LandUseType,
+      geometry,
+      areaSqm: polygonArea(geometry),
+      locked: false,
+      generated: false,
+      parcelId: id,
+      subtype: params.subtypeId,
+      label,
+    }));
+    set({
+      features: [
+        ...get().features.filter((f) => f.parcelId !== id),
+        ...plotFeatures,
+      ],
+    });
+    get().pushToast(
+      truncated
+        ? `Added ${plotFeatures.length} plots (capped — increase plot size).`
+        : `Subdivided into ${plotFeatures.length} ${label.toLowerCase()} plots.`,
+      truncated ? "info" : "success",
+    );
+  },
+
+  clearParcelPlots: (id) => {
+    set({ features: get().features.filter((f) => f.parcelId !== id) });
+    get().pushToast("Cleared plots for this parcel.", "info");
+  },
 
   setRoadClass: (id, roadClass) =>
     set({
@@ -316,14 +405,25 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   },
 
   generate: () => {
-    const { boundary, parcels, roads, controls } = get();
-    const { features, summary } = generateLayout({
+    const { boundary, parcels, roads, controls, features } = get();
+    // parcel plots (and any other non-generated features) survive generation;
+    // only generated features are replaced. Locked generated features are
+    // preserved via the generator's lockedFeatures path.
+    const preserved = features.filter((f) => !f.generated);
+    const lockedGenerated = features.filter((f) => f.generated && f.locked);
+    const { features: gen, summary } = generateLayout({
       boundary,
       parcels,
       roads,
       controls,
+      lockedFeatures: lockedGenerated,
     });
-    set({ features, summary, drawMode: "none", selectedId: null });
+    set({
+      features: [...preserved, ...gen],
+      summary,
+      drawMode: "none",
+      selectedId: null,
+    });
     const errors = summary.warnings.filter((w) => w.severity === "error");
     if (errors.length > 0) get().pushToast(errors[0].message, "error");
     else get().pushToast("Layout generated.", "success");
@@ -331,15 +431,16 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   regenerateUnlocked: (silent = false) => {
     const { boundary, parcels, roads, controls, features } = get();
-    const lockedFeatures = features.filter((f) => f.locked);
+    const preserved = features.filter((f) => !f.generated);
+    const lockedGenerated = features.filter((f) => f.generated && f.locked);
     const { features: next, summary } = generateLayout({
       boundary,
       parcels,
       roads,
       controls,
-      lockedFeatures,
+      lockedFeatures: lockedGenerated,
     });
-    set({ features: next, summary, selectedId: null });
+    set({ features: [...preserved, ...next], summary, selectedId: null });
     if (!silent) get().pushToast("Regenerated unlocked areas.", "success");
   },
 
@@ -347,7 +448,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   clearGenerated: () => {
     set({
-      features: get().features.filter((f) => f.locked),
+      // keep parcel plots / non-generated features and any locked features
+      features: get().features.filter((f) => !f.generated || f.locked),
       summary: null,
       selectedId: null,
     });

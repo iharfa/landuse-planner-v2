@@ -12,9 +12,11 @@ import {
   LAND_USE_LABELS,
   ROAD_CLASS_DEFAULTS,
   ROAD_CLASS_ORDER,
+  getSubtypes,
+  defaultPlotParams,
 } from "@/lib/generation/constants";
-import type { LandUseType, RoadClass } from "@/lib/types";
-import { Lock, Unlock, Trash2, Scissors } from "lucide-react";
+import type { LandUseType, RoadClass, ParcelSizing } from "@/lib/types";
+import { Lock, Unlock, Trash2, Scissors, Grid3x3, Eraser } from "lucide-react";
 
 const EDITABLE_USES: LandUseType[] = [
   "residential",
@@ -112,29 +114,164 @@ function ParcelEditor() {
   const parcel = usePlanningStore((s) =>
     s.parcels.find((p) => p.id === s.selectedId),
   );
+  const plotCount = usePlanningStore(
+    (s) => s.features.filter((f) => f.parcelId === s.selectedId).length,
+  );
   const changeParcelLandUse = usePlanningStore((s) => s.changeParcelLandUse);
   const deleteParcel = usePlanningStore((s) => s.deleteParcel);
   if (!parcel) return null;
 
   return (
-    <Panel title="Edit parcel">
-      <div className="text-[11px] text-slate-400">
-        Area:{" "}
-        <span className="font-mono text-slate-200">
-          {formatArea(parcel.areaSqm)}
-        </span>
-      </div>
-      <LandUseSelect
-        value={parcel.landUse ?? "unassigned"}
-        onChange={(u) => changeParcelLandUse(parcel.id, u)}
+    <>
+      <Panel title="Edit parcel">
+        <div className="text-[11px] text-slate-400">
+          Area:{" "}
+          <span className="font-mono text-slate-200">
+            {formatArea(parcel.areaSqm)}
+          </span>
+        </div>
+        <LandUseSelect
+          value={parcel.landUse ?? "unassigned"}
+          onChange={(u) => changeParcelLandUse(parcel.id, u)}
+        />
+        <Button variant="danger" onClick={() => deleteParcel(parcel.id)}>
+          <Trash2 className="h-4 w-4" /> Delete parcel
+        </Button>
+        <p className="text-[10px] text-slate-500 leading-snug">
+          Parcels with a land use are kept as fixed zones — the generator fills
+          around them. Leave a parcel “Unassigned” to let the generator
+          subdivide it.
+        </p>
+      </Panel>
+      <ParcelSubdivision parcelId={parcel.id} plotCount={plotCount} />
+    </>
+  );
+}
+
+/** Subtype + plot-sizing controls and the Subdivide action for a parcel. */
+function ParcelSubdivision({
+  parcelId,
+  plotCount,
+}: {
+  parcelId: string;
+  plotCount: number;
+}) {
+  const parcel = usePlanningStore((s) =>
+    s.parcels.find((p) => p.id === parcelId),
+  );
+  const setParcelSubtype = usePlanningStore((s) => s.setParcelSubtype);
+  const setParcelPlotParams = usePlanningStore((s) => s.setParcelPlotParams);
+  const subdivideParcel = usePlanningStore((s) => s.subdivideParcel);
+  const clearParcelPlots = usePlanningStore((s) => s.clearParcelPlots);
+
+  if (!parcel) return null;
+  const use = parcel.landUse;
+  const subtypes = getSubtypes(use);
+  if (subtypes.length === 0) return null; // use not subdividable
+
+  const params = parcel.plotParams ?? defaultPlotParams(use)!;
+  const derivedArea =
+    params.sizing === "dimensions"
+      ? params.widthM * params.depthM
+      : params.areaSqm;
+
+  return (
+    <Panel title="Subdivide into plots">
+      <label className="block">
+        <div className="text-xs text-slate-300 mb-1">Plot type</div>
+        <select
+          value={params.subtypeId}
+          onChange={(e) => setParcelSubtype(parcel.id, e.target.value)}
+          className="w-full rounded-md bg-slate-800/80 border border-white/10 px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+        >
+          {subtypes.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <SegmentedControl<ParcelSizing>
+        label="Size by"
+        value={params.sizing}
+        onChange={(v) => setParcelPlotParams(parcel.id, { sizing: v })}
+        options={[
+          { label: "Width × Depth", value: "dimensions" },
+          { label: "Area", value: "area" },
+        ]}
       />
-      <Button variant="danger" onClick={() => deleteParcel(parcel.id)}>
-        <Trash2 className="h-4 w-4" /> Delete parcel
+
+      {params.sizing === "dimensions" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <LabeledNumber
+            label="Width"
+            value={params.widthM}
+            min={2}
+            max={200}
+            step={0.5}
+            suffix="m"
+            onChange={(v) => setParcelPlotParams(parcel.id, { widthM: v })}
+          />
+          <LabeledNumber
+            label="Depth"
+            value={params.depthM}
+            min={2}
+            max={200}
+            step={0.5}
+            suffix="m"
+            onChange={(v) => setParcelPlotParams(parcel.id, { depthM: v })}
+          />
+        </div>
+      ) : (
+        <LabeledNumber
+          label="Target plot area"
+          value={params.areaSqm}
+          min={20}
+          max={50000}
+          step={10}
+          suffix="m²"
+          onChange={(v) => setParcelPlotParams(parcel.id, { areaSqm: v })}
+        />
+      )}
+
+      <LabeledNumber
+        label="Gap between plots"
+        value={params.gapM}
+        min={0}
+        max={20}
+        step={0.5}
+        suffix="m"
+        onChange={(v) => setParcelPlotParams(parcel.id, { gapM: v })}
+      />
+
+      <div className="text-[11px] text-slate-400">
+        ≈{" "}
+        <span className="font-mono text-slate-200">
+          {formatArea(derivedArea)}
+        </span>{" "}
+        per plot
+        {plotCount > 0 && (
+          <>
+            {" · "}
+            <span className="font-mono text-cyan-300">{plotCount}</span> plots
+          </>
+        )}
+      </div>
+
+      <Button variant="primary" onClick={() => subdivideParcel(parcel.id)}>
+        <Grid3x3 className="h-4 w-4" />{" "}
+        {plotCount > 0 ? "Re-subdivide" : "Subdivide"}
       </Button>
+      {plotCount > 0 && (
+        <Button onClick={() => clearParcelPlots(parcel.id)}>
+          <Eraser className="h-4 w-4" /> Clear plots
+        </Button>
+      )}
       <p className="text-[10px] text-slate-500 leading-snug">
-        Parcels with a land use are kept as fixed zones — the generator fills
-        around them. Leave a parcel “Unassigned” to let the generator subdivide
-        it.
+        Plots tile the parcel along its longest edge and are clipped to its
+        shape. They’re individual features — select one to change its use or
+        delete it.
       </p>
     </Panel>
   );

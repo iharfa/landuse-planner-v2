@@ -1,4 +1,10 @@
-import type { LandUseType, DensityLevel, RoadClass } from "@/lib/types";
+import type {
+  LandUseType,
+  DensityLevel,
+  RoadClass,
+  ParcelSizing,
+  ParcelPlotParams,
+} from "@/lib/types";
 
 /**
  * Editable rule-based planning constants. Tune these to change how the
@@ -112,6 +118,73 @@ export function computeRoadWidth(roadClass: RoadClass, lanes: number): number {
   const d = ROAD_CLASS_DEFAULTS[roadClass];
   const safeLanes = Math.max(1, Math.round(lanes));
   return Math.round((safeLanes * d.laneWidthM + 2 * d.vergeM) * 10) / 10;
+}
+
+/**
+ * Plot subtypes per developable land use. Each carries default sizing the user
+ * can override per parcel. `defaultSizing` decides whether the subtype is sized
+ * by width×depth or by target area out of the box.
+ */
+export interface ParcelSubtype {
+  id: string;
+  label: string;
+  defaultSizing: ParcelSizing;
+  widthM: number;
+  depthM: number;
+  areaSqm: number;
+  gapM: number;
+}
+
+export const PARCEL_SUBTYPES: Partial<Record<LandUseType, ParcelSubtype[]>> = {
+  residential: [
+    { id: "row-house", label: "Row houses", defaultSizing: "dimensions", widthM: 6, depthM: 18, areaSqm: 108, gapM: 0 },
+    { id: "private-home", label: "Private homes", defaultSizing: "dimensions", widthM: 15, depthM: 25, areaSqm: 375, gapM: 2 },
+    { id: "social-housing", label: "Social housing", defaultSizing: "dimensions", widthM: 8, depthM: 16, areaSqm: 128, gapM: 1 },
+    { id: "luxury-housing", label: "Luxury housing", defaultSizing: "area", widthM: 30, depthM: 40, areaSqm: 1200, gapM: 4 },
+    { id: "apartment-complex", label: "Apartment complexes", defaultSizing: "area", widthM: 40, depthM: 60, areaSqm: 2500, gapM: 5 },
+  ],
+  commercial: [
+    { id: "retail-strip", label: "Retail strip", defaultSizing: "dimensions", widthM: 10, depthM: 25, areaSqm: 250, gapM: 0 },
+    { id: "shopping-mall", label: "Shopping mall", defaultSizing: "area", widthM: 80, depthM: 100, areaSqm: 8000, gapM: 6 },
+    { id: "mixed-use", label: "Mixed-use blocks", defaultSizing: "dimensions", widthM: 20, depthM: 30, areaSqm: 600, gapM: 3 },
+  ],
+  industrial: [
+    { id: "light-industrial", label: "Light industrial", defaultSizing: "area", widthM: 40, depthM: 50, areaSqm: 2000, gapM: 4 },
+    { id: "heavy-industrial", label: "Heavy industrial", defaultSizing: "area", widthM: 70, depthM: 70, areaSqm: 5000, gapM: 6 },
+    { id: "warehouse", label: "Warehouses", defaultSizing: "dimensions", widthM: 40, depthM: 60, areaSqm: 2400, gapM: 4 },
+  ],
+};
+
+/** Land uses that support subtype-based subdivision. */
+export const SUBDIVIDABLE_USES = Object.keys(PARCEL_SUBTYPES) as LandUseType[];
+
+export function getSubtypes(use: LandUseType | undefined): ParcelSubtype[] {
+  return (use && PARCEL_SUBTYPES[use]) || [];
+}
+
+export function findSubtype(
+  use: LandUseType | undefined,
+  subtypeId: string,
+): ParcelSubtype | undefined {
+  return getSubtypes(use).find((s) => s.id === subtypeId);
+}
+
+/** Build default plot params for the first (or named) subtype of a use. */
+export function defaultPlotParams(
+  use: LandUseType | undefined,
+  subtypeId?: string,
+): ParcelPlotParams | undefined {
+  const list = getSubtypes(use);
+  if (list.length === 0) return undefined;
+  const st = (subtypeId && list.find((s) => s.id === subtypeId)) || list[0];
+  return {
+    subtypeId: st.id,
+    sizing: st.defaultSizing,
+    widthM: st.widthM,
+    depthM: st.depthM,
+    areaSqm: st.areaSqm,
+    gapM: st.gapM,
+  };
 }
 
 /** Order shown in the legend. */
