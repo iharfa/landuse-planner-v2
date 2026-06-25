@@ -63,19 +63,38 @@ export function generateLayout(input: GenerationInput): GenerationResult {
   const activityCenter = centroidOf(boundary.geometry);
 
   // --- Step 2: prepare buildable land ---
+  // Parcels with an explicit land use are fixed zones: the generator fills
+  // *around* them (they are subtracted from buildable, never subdivided).
+  // Parcels left "unassigned" act as buildable sub-areas (the original
+  // behaviour).
+  const fixedParcels = parcels.filter(
+    (p) => p.landUse && p.landUse !== "unassigned",
+  );
+  const buildableParcels = parcels.filter(
+    (p) => !p.landUse || p.landUse === "unassigned",
+  );
+
   let buildable: Feature<Polygon | MultiPolygon>;
-  if (parcels.length > 0) {
-    const clipped = parcels
+  if (buildableParcels.length > 0) {
+    const clipped = buildableParcels
       .map((p) => safeIntersect(turf.polygon(p.geometry.coordinates), boundaryFeature))
       .filter(Boolean) as Feature<Polygon | MultiPolygon>[];
     buildable = safeUnion(clipped) ?? boundaryFeature;
   } else {
     buildable = boundaryFeature;
-    warnings.push({
-      id: makeId("w"),
-      severity: "info",
-      message: "No internal parcels — using the main boundary as one parcel.",
-    });
+    if (fixedParcels.length === 0) {
+      warnings.push({
+        id: makeId("w"),
+        severity: "info",
+        message: "No internal parcels — using the main boundary as one parcel.",
+      });
+    }
+  }
+
+  // Subtract fixed-use parcels so the generator never overlaps them.
+  for (const fp of fixedParcels) {
+    const diff = safeDifference(buildable, turf.polygon(fp.geometry.coordinates));
+    if (diff) buildable = diff;
   }
 
   // Subtract locked features so regeneration leaves them untouched.

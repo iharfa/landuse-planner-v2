@@ -10,8 +10,9 @@ import {
 } from "@/components/ui/Controls";
 import { ScenarioPanel } from "./ScenarioPanel";
 import { ExportPanel } from "@/components/tools/ExportPanel";
-import { SlidersHorizontal, Users, Building2 } from "lucide-react";
-import type { DensityLevel, WalkabilityTarget } from "@/lib/types";
+import { SlidersHorizontal, Users, Building2, Eye, EyeOff } from "lucide-react";
+import type { DensityLevel, WalkabilityTarget, LandUseType } from "@/lib/types";
+import { LAND_USE_COLORS, LAND_USE_LABELS } from "@/lib/generation/constants";
 
 export function RightControls() {
   const controls = usePlanningStore((s) => s.controls);
@@ -196,20 +197,43 @@ export function RightControls() {
 function LayerToggles() {
   const layerVisible = usePlanningStore((s) => s.layerVisible);
   const toggleLayer = usePlanningStore((s) => s.toggleLayer);
-  const uses = Object.keys(layerVisible) as (keyof typeof layerVisible)[];
+  const uses = (Object.keys(layerVisible) as LandUseType[]).filter(
+    (u) => u !== "locked",
+  );
   return (
     <Panel title="Layers" icon={<Building2 className="h-3.5 w-3.5" />}>
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-        {uses
-          .filter((u) => u !== "locked")
-          .map((u) => (
-            <Toggle
+      <div className="grid grid-cols-2 gap-1.5">
+        {uses.map((u) => {
+          const on = layerVisible[u];
+          return (
+            <button
               key={u}
-              label={u.charAt(0).toUpperCase() + u.slice(1)}
-              checked={layerVisible[u]}
-              onChange={() => toggleLayer(u)}
-            />
-          ))}
+              type="button"
+              onClick={() => toggleLayer(u)}
+              title={`${on ? "Hide" : "Show"} ${LAND_USE_LABELS[u]}`}
+              aria-pressed={on}
+              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] transition-colors ${
+                on
+                  ? "border-white/10 bg-slate-800/70 text-slate-200 hover:bg-slate-700/70"
+                  : "border-white/5 bg-slate-900/40 text-slate-500 hover:bg-slate-800/40"
+              }`}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{
+                  backgroundColor: LAND_USE_COLORS[u],
+                  opacity: on ? 1 : 0.35,
+                }}
+              />
+              <span className="flex-1 truncate">{LAND_USE_LABELS[u]}</span>
+              {on ? (
+                <Eye className="h-3 w-3 shrink-0 text-cyan-300" />
+              ) : (
+                <EyeOff className="h-3 w-3 shrink-0" />
+              )}
+            </button>
+          );
+        })}
       </div>
     </Panel>
   );

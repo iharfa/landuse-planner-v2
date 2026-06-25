@@ -1,6 +1,7 @@
 import type { Feature, Polygon, LineString, Position } from "geojson";
 import type { BoundaryFeature, RoadFeature } from "@/lib/types";
 import { turf, lineLength, makeId } from "@/lib/geometry/turfHelpers";
+import { computeRoadWidth } from "@/lib/generation/constants";
 
 /**
  * Generate a connected grid of road centerlines that fills the boundary.
@@ -62,11 +63,17 @@ export function generateRoadGrid(
     for (const seg of clipLineToPolygon(l.line, poly)) {
       const len = lineLength(seg.geometry);
       if (len < 12) continue;
+      const arterial = l.offset === minOffsetByBearing.get(l.bearing);
+      const roadClass = arterial ? "main" : "service";
+      const lanes = arterial ? 4 : 2;
       roads.push({
         id: makeId("road"),
         geometry: seg.geometry,
         lengthM: len,
-        arterial: l.offset === minOffsetByBearing.get(l.bearing),
+        roadClass,
+        lanes,
+        widthM: computeRoadWidth(roadClass, lanes),
+        arterial,
       });
     }
   }

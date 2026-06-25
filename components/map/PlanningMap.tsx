@@ -11,10 +11,11 @@ import {
   TerraDrawCircleMode,
 } from "terra-draw";
 import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { usePlanningStore } from "@/store/usePlanningStore";
 import { BASEMAPS } from "@/lib/map/basemaps";
-import { LAND_USE_COLORS } from "@/lib/generation/constants";
+import { LAND_USE_COLORS, ROAD_CLASS_DEFAULTS } from "@/lib/generation/constants";
+import { turf } from "@/lib/geometry/turfHelpers";
 import { MapControls } from "./MapControls";
 
 const SRC_FEATURES = "ils-features";
@@ -68,15 +69,48 @@ export function PlanningMap() {
       const st = store.getState();
       const dm = st.drawMode;
       if (dm !== "none" && dm !== "select" && dm !== "merge") return;
-      const hits = map.queryRenderedFeatures(e.point, {
+
+      // generated features take click priority, then parcels, then roads.
+      const featureHits = map.queryRenderedFeatures(e.point, {
         layers: ["ils-features-fill"],
       });
-      const id = hits.length > 0 ? (hits[0].properties?.id as string) : null;
-      if (dm === "merge" && st.selectedId && id && id !== st.selectedId) {
-        st.mergeFeatures(st.selectedId, id);
+      const featureId =
+        featureHits.length > 0 ? (featureHits[0].properties?.id as string) : null;
+
+      if (dm === "merge" && st.selectedId && featureId && featureId !== st.selectedId) {
+        st.mergeFeatures(st.selectedId, featureId);
         return;
       }
-      st.setSelected(id);
+
+      if (featureId) {
+        st.setSelected(featureId);
+        return;
+      }
+
+      // parcels
+      const parcelHits = map.queryRenderedFeatures(e.point, {
+        layers: ["ils-parcels-fill"],
+      });
+      if (parcelHits.length > 0) {
+        st.setSelected(parcelHits[0].properties?.id as string);
+        return;
+      }
+
+      // roads — query a small box so thin centerlines are easy to hit
+      const pad = 6;
+      const box: [maplibregl.PointLike, maplibregl.PointLike] = [
+        [e.point.x - pad, e.point.y - pad],
+        [e.point.x + pad, e.point.y + pad],
+      ];
+      const roadHits = map.queryRenderedFeatures(box, {
+        layers: ["ils-roads-line", "ils-roads-vehiclefree"],
+      });
+      if (roadHits.length > 0) {
+        st.setSelected(roadHits[0].properties?.id as string);
+        return;
+      }
+
+      st.setSelected(null);
     });
 
     return () => {
@@ -89,11 +123,17 @@ export function PlanningMap() {
 
   // --- terra-draw setup ---
   function setupDraw(map: maplibregl.Map) {
+    // Live snapping: while drawing a road or parcel, snap the cursor onto the
+    // nearest vertex / segment of the existing road + parcel network so lines
+    // connect cleanly. Reads the live store so it always sees the latest geometry.
+    const snapToNetwork = (event: { lng: number; lat: number }) =>
+      snapPositionToNetwork([event.lng, event.lat], map.getZoom());
+
     const draw = new TerraDraw({
       adapter: new TerraDrawMapLibreGLAdapter({ map }),
       modes: [
-        new TerraDrawPolygonMode(),
-        new TerraDrawLineStringMode(),
+        new TerraDrawPolygonMode({ snapping: { toCustom: snapToNetwork } }),
+        new TerraDrawLineStringMode({ snapping: { toCustom: snapToNetwork } }),
         // freehand line → curved/arched roads; circle → ring roads
         new TerraDrawFreehandLineStringMode(),
         new TerraDrawCircleMode(),
@@ -183,19 +223,41 @@ export function PlanningMap() {
       fc(s.boundary ? [feat(s.boundary.geometry, {})] : []),
     );
     (map.getSource(SRC_PARCELS) as maplibregl.GeoJSONSource).setData(
-      fc(s.parcels.map((p) => feat(p.geometry, {}))),
+      fc(
+        s.parcels.map((p) =>
+          feat(p.geometry, {
+            id: p.id,
+            landUse: p.landUse ?? "unassigned",
+            color: LAND_USE_COLORS[p.landUse ?? "unassigned"],
+          }),
+        ),
+      ),
     );
     (map.getSource(SRC_ROADS) as maplibregl.GeoJSONSource).setData(
-      fc(s.roads.map((r) => feat(r.geometry, { arterial: r.arterial ? 1 : 0 }))),
+      fc(
+        s.roads.map((r) =>
+          feat(r.geometry, {
+            id: r.id,
+            arterial: r.arterial ? 1 : 0,
+            roadClass: r.roadClass ?? "service",
+            color: ROAD_CLASS_DEFAULTS[r.roadClass ?? "service"].color,
+            widthM: r.widthM ?? 8,
+            vehicleFree: r.roadClass === "vehicle-free" ? 1 : 0,
+          }),
+        ),
+      ),
     );
 
-    // selected outline filter
-    if (map.getLayer("ils-features-selected")) {
-      map.setFilter("ils-features-selected", [
-        "==",
-        ["get", "id"],
-        s.selectedId ?? "__none__",
-      ]);
+    // selected outline filters (features, parcels, roads share one selectedId)
+    const sel = s.selectedId ?? "__none__";
+    for (const layer of [
+      "ils-features-selected",
+      "ils-parcels-selected",
+      "ils-roads-selected",
+    ]) {
+      if (map.getLayer(layer)) {
+        map.setFilter(layer, ["==", ["get", "id"], sel]);
+      }
     }
   }
 
@@ -321,13 +383,47 @@ function addOverlayLayers(map: maplibregl.Map) {
       },
     });
   }
-  // parcels
+  // parcels — filled by their assigned land use, faint when unassigned
+  if (!map.getLayer("ils-parcels-fill")) {
+    map.addLayer({
+      id: "ils-parcels-fill",
+      type: "fill",
+      source: SRC_PARCELS,
+      paint: {
+        "fill-color": ["get", "color"],
+        "fill-opacity": [
+          "case",
+          ["==", ["get", "landUse"], "unassigned"],
+          0.12,
+          0.45,
+        ],
+      },
+    });
+  }
   if (!map.getLayer("ils-parcels-line")) {
     map.addLayer({
       id: "ils-parcels-line",
       type: "line",
       source: SRC_PARCELS,
-      paint: { "line-color": "#fbbf24", "line-width": 1.5, "line-dasharray": [3, 2] },
+      paint: {
+        "line-color": [
+          "case",
+          ["==", ["get", "landUse"], "unassigned"],
+          "#fbbf24",
+          ["get", "color"],
+        ],
+        "line-width": 1.5,
+        "line-dasharray": [3, 2],
+      },
+    });
+  }
+  if (!map.getLayer("ils-parcels-selected")) {
+    map.addLayer({
+      id: "ils-parcels-selected",
+      type: "line",
+      source: SRC_PARCELS,
+      filter: ["==", ["get", "id"], "__none__"],
+      paint: { "line-color": "#22d3ee", "line-width": 3 },
     });
   }
   // boundary
@@ -339,17 +435,59 @@ function addOverlayLayers(map: maplibregl.Map) {
       paint: { "line-color": "#22d3ee", "line-width": 2.5 },
     });
   }
-  // roads centerlines
+  // roads centerlines — colored by class, width scaled by carriageway width,
+  // vehicle-free roads drawn dashed
   if (!map.getLayer("ils-roads-line")) {
     map.addLayer({
       id: "ils-roads-line",
       type: "line",
       source: SRC_ROADS,
+      filter: ["!=", ["get", "vehicleFree"], 1],
       paint: {
-        "line-color": ["case", ["==", ["get", "arterial"], 1], "#fde047", "#e2e8f0"],
-        "line-width": ["case", ["==", ["get", "arterial"], 1], 3, 1.5],
-        "line-dasharray": [1, 1],
+        "line-color": ["get", "color"],
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12,
+          ["max", 1.5, ["*", ["get", "widthM"], 0.15]],
+          18,
+          ["max", 2.5, ["*", ["get", "widthM"], 0.7]],
+        ],
+        "line-opacity": 0.95,
       },
+    });
+  }
+  // vehicle-free roads: dashed, so they read as pedestrian-only routes
+  if (!map.getLayer("ils-roads-vehiclefree")) {
+    map.addLayer({
+      id: "ils-roads-vehiclefree",
+      type: "line",
+      source: SRC_ROADS,
+      filter: ["==", ["get", "vehicleFree"], 1],
+      paint: {
+        "line-color": ["get", "color"],
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12,
+          ["max", 1.5, ["*", ["get", "widthM"], 0.15]],
+          18,
+          ["max", 2.5, ["*", ["get", "widthM"], 0.7]],
+        ],
+        "line-opacity": 0.95,
+        "line-dasharray": [2, 2],
+      },
+    });
+  }
+  if (!map.getLayer("ils-roads-selected")) {
+    map.addLayer({
+      id: "ils-roads-selected",
+      type: "line",
+      source: SRC_ROADS,
+      filter: ["==", ["get", "id"], "__none__"],
+      paint: { "line-color": "#22d3ee", "line-width": 5, "line-opacity": 0.6 },
     });
   }
 }
@@ -366,4 +504,65 @@ function fc(features: Feature[]): FeatureCollection {
 
 function feat(geometry: Geometry, properties: Record<string, unknown>): Feature {
   return { type: "Feature", geometry, properties };
+}
+
+/**
+ * Snap a cursor position onto the nearest vertex (preferred) or segment of the
+ * existing road + parcel + boundary network, within a zoom-aware tolerance.
+ * Returns undefined when nothing is close enough (so the cursor stays free).
+ */
+function snapPositionToNetwork(
+  pos: Position,
+  zoom: number,
+): Position | undefined {
+  const s = usePlanningStore.getState();
+
+  // tolerance: ~14 screen px converted to metres at this zoom/latitude
+  const lat = pos[1];
+  const metresPerPixel =
+    (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
+  const tolM = Math.max(2, metresPerPixel * 14);
+
+  const lines: Position[][] = [
+    ...s.roads.map((r) => r.geometry.coordinates),
+    ...s.parcels.map((p) => p.geometry.coordinates[0]),
+  ];
+  if (s.boundary) lines.push(s.boundary.geometry.coordinates[0]);
+  if (lines.length === 0) return undefined;
+
+  const pt = turf.point(pos);
+
+  // 1) nearest existing vertex
+  let bestVertex: Position | null = null;
+  let bestVertexDist = tolM;
+  for (const line of lines) {
+    for (const v of line) {
+      const d = turf.distance(pt, turf.point(v), { units: "meters" });
+      if (d < bestVertexDist) {
+        bestVertexDist = d;
+        bestVertex = v;
+      }
+    }
+  }
+  if (bestVertex) return bestVertex;
+
+  // 2) otherwise nearest point along a segment
+  let bestOnLine: Position | null = null;
+  let bestOnLineDist = tolM;
+  for (const line of lines) {
+    if (line.length < 2) continue;
+    try {
+      const snap = turf.nearestPointOnLine(turf.lineString(line), pt, {
+        units: "meters",
+      });
+      const d = snap.properties.dist ?? Infinity;
+      if (d < bestOnLineDist) {
+        bestOnLineDist = d;
+        bestOnLine = snap.geometry.coordinates;
+      }
+    } catch {
+      /* ignore degenerate lines */
+    }
+  }
+  return bestOnLine ?? undefined;
 }

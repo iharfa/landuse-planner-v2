@@ -1,4 +1,4 @@
-import type { LandUseType, DensityLevel } from "@/lib/types";
+import type { LandUseType, DensityLevel, RoadClass } from "@/lib/types";
 
 /**
  * Editable rule-based planning constants. Tune these to change how the
@@ -84,6 +84,35 @@ export const LAND_USE_LABELS: Record<LandUseType, string> = {
   unassigned: "Unassigned",
   locked: "Locked",
 };
+
+/**
+ * Per-class road defaults. Carriageway width is derived from lanes:
+ *   widthM = lanes * laneWidthM + 2 * vergeM
+ * `computeRoadWidth` is the single source of truth for that formula.
+ */
+export const ROAD_CLASS_DEFAULTS: Record<
+  RoadClass,
+  { lanes: number; laneWidthM: number; vergeM: number; color: string; label: string }
+> = {
+  main: { lanes: 4, laneWidthM: 3.5, vergeM: 2, color: "#fde047", label: "Main road" },
+  service: { lanes: 2, laneWidthM: 3.0, vergeM: 1, color: "#e2e8f0", label: "Service road" },
+  "vehicle-free": {
+    lanes: 1,
+    laneWidthM: 3.0,
+    vergeM: 0.5,
+    color: "#34d399",
+    label: "Vehicle-free",
+  },
+};
+
+export const ROAD_CLASS_ORDER: RoadClass[] = ["main", "service", "vehicle-free"];
+
+/** Auto carriageway width (m) for a road class and lane count. */
+export function computeRoadWidth(roadClass: RoadClass, lanes: number): number {
+  const d = ROAD_CLASS_DEFAULTS[roadClass];
+  const safeLanes = Math.max(1, Math.round(lanes));
+  return Math.round((safeLanes * d.laneWidthM + 2 * d.vergeM) * 10) / 10;
+}
 
 /** Order shown in the legend. */
 export const LEGEND_ORDER: LandUseType[] = [

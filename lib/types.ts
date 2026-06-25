@@ -20,14 +20,32 @@ export interface BoundaryFeature {
   kind: "boundary" | "parcel";
   geometry: Polygon;
   areaSqm: number;
+  /**
+   * For parcels: the land use assigned to this zone. "unassigned" parcels are
+   * treated as buildable land for the generator; any explicit use makes the
+   * parcel a fixed land-use zone that the generator preserves.
+   */
+  landUse?: LandUseType;
 }
+
+/** Road hierarchy / type the user can designate per road. */
+export type RoadClass = "main" | "service" | "vehicle-free";
 
 /** User-drawn road centerline. */
 export interface RoadFeature {
   id: string;
   geometry: LineString;
   lengthM: number;
-  /** main arterial vs secondary branch — inferred or user-set */
+  /** road hierarchy / type designated by the user */
+  roadClass: RoadClass;
+  /** number of lanes (drives the auto width) */
+  lanes: number;
+  /** carriageway width in metres (auto from class+lanes, user-overridable) */
+  widthM: number;
+  /**
+   * main arterial vs secondary branch — kept for the generator (commercial
+   * frontage). Derived from roadClass === "main".
+   */
   arterial: boolean;
 }
 

@@ -31,13 +31,15 @@ export function buildRoadGeometry(
   buildable: Feature<Polygon | MultiPolygon>,
   controls: PlanningControls,
 ): RoadGeometry {
-  const halfWidth = controls.roadWidthM / 2;
   const frontageDepth = FRONTAGE_DEPTH_M[controls.density];
 
   const roadBuffers: Feature<Polygon | MultiPolygon>[] = [];
   const bandBuffers: Feature<Polygon | MultiPolygon>[] = [];
 
   for (const road of roads) {
+    // Each road carries its own width (from its class + lanes); fall back to the
+    // global default for scenarios saved before per-road widths existed.
+    const halfWidth = (road.widthM ?? controls.roadWidthM) / 2;
     const line = turf.feature(road.geometry);
     const rb = safeBuffer(line, halfWidth);
     if (rb) roadBuffers.push(rb);

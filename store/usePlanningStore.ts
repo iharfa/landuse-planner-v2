@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type {
   BoundaryFeature,
   RoadFeature,
+  RoadClass,
   PlanningFeature,
   PlanningControls,
   PlanningScenario,
@@ -12,6 +13,7 @@ import type {
   LandUseType,
 } from "@/lib/types";
 import { DEFAULT_CONTROLS } from "@/lib/types";
+import { computeRoadWidth, ROAD_CLASS_DEFAULTS } from "@/lib/generation/constants";
 import { generateLayout } from "@/lib/generation/generateLayout";
 import {
   makeId,
@@ -55,6 +57,10 @@ interface PlanningState {
 
   drawMode: DrawMode;
   selectedId: string | null;
+  /** land use applied to the next parcel drawn */
+  parcelDraftUse: LandUseType;
+  /** class / lanes applied to the next road drawn */
+  roadDraft: { roadClass: RoadClass; lanes: number; widthM: number };
   basemap: BasemapId;
   mapCenter: [number, number];
   mapZoom: number;
@@ -67,6 +73,8 @@ interface PlanningState {
   setControls: (patch: Partial<PlanningControls>) => void;
   setDrawMode: (mode: DrawMode) => void;
   setSelected: (id: string | null) => void;
+  setParcelDraftUse: (use: LandUseType) => void;
+  setRoadDraft: (patch: Partial<{ roadClass: RoadClass; lanes: number; widthM: number }>) => void;
   setBasemap: (id: BasemapId) => void;
   setMapView: (center: [number, number], zoom: number) => void;
   toggleLayer: (use: LandUseType) => void;
@@ -76,6 +84,17 @@ interface PlanningState {
   addParcel: (geometry: BoundaryFeature["geometry"]) => void;
   addRoad: (geometry: RoadFeature["geometry"]) => void;
   clearRoads: () => void;
+
+  // parcel editing
+  changeParcelLandUse: (id: string, use: LandUseType) => void;
+  deleteParcel: (id: string) => void;
+  updateParcelGeometry: (id: string, geometry: BoundaryFeature["geometry"]) => void;
+
+  // road editing
+  setRoadClass: (id: string, roadClass: RoadClass) => void;
+  setRoadLanes: (id: string, lanes: number) => void;
+  setRoadWidth: (id: string, widthM: number) => void;
+  deleteRoad: (id: string) => void;
   fillRoadGrid: (spacingM: number, angleDeg: number) => void;
 
   // generation
@@ -127,6 +146,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   summary: null,
   drawMode: "none",
   selectedId: null,
+  parcelDraftUse: "residential",
+  roadDraft: { roadClass: "main", lanes: 4, widthM: computeRoadWidth("main", 4) },
   basemap: "satellite",
   mapCenter: MALDIVES_CENTER,
   mapZoom: DEFAULT_ZOOM,
@@ -138,6 +159,20 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   setControls: (patch) => set({ controls: { ...get().controls, ...patch } }),
   setDrawMode: (mode) => set({ drawMode: mode, selectedId: null }),
   setSelected: (id) => set({ selectedId: id }),
+  setParcelDraftUse: (use) => set({ parcelDraftUse: use }),
+  setRoadDraft: (patch) => {
+    const next = { ...get().roadDraft, ...patch };
+    // picking a new class resets lanes to that class's default
+    if (patch.roadClass && patch.lanes === undefined) {
+      next.lanes = ROAD_CLASS_DEFAULTS[patch.roadClass].lanes;
+    }
+    // class or lanes changes recompute the auto width unless width was set
+    // explicitly in the same patch (manual override)
+    if ((patch.roadClass || patch.lanes !== undefined) && patch.widthM === undefined) {
+      next.widthM = computeRoadWidth(next.roadClass, next.lanes);
+    }
+    set({ roadDraft: next });
+  },
   setBasemap: (id) => set({ basemap: id }),
   setMapView: (center, zoom) => set({ mapCenter: center, mapZoom: zoom }),
   toggleLayer: (use) =>
@@ -154,23 +189,29 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       drawMode: "none",
     }),
 
-  addParcel: (geometry) =>
+  addParcel: (geometry) => {
+    const id = makeId("parcel");
     set({
       parcels: [
         ...get().parcels,
         {
-          id: makeId("parcel"),
+          id,
           kind: "parcel",
           geometry,
           areaSqm: polygonArea(geometry),
+          landUse: get().parcelDraftUse,
         },
       ],
-      drawMode: "none",
-    }),
+      // select the new parcel so its use can be edited immediately
+      selectedId: id,
+      drawMode: "select",
+    });
+  },
 
   addRoad: (geometry) => {
     const existing = get().roads;
     // snap the new road's endpoints onto the existing network so it connects
+    // (a safety net on top of the live snapping done while drawing)
     const snapped: RoadFeature["geometry"] = {
       type: "LineString",
       coordinates: snapLineEndpoints(
@@ -179,13 +220,19 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       ),
     };
     const len = lineLength(snapped);
-    // The first road drawn is treated as the main arterial (commercial
-    // frontage); later roads are secondary branches (residential frontage).
-    const arterial = existing.length === 0;
+    const draft = get().roadDraft;
     set({
       roads: [
         ...existing,
-        { id: makeId("road"), geometry: snapped, lengthM: len, arterial },
+        {
+          id: makeId("road"),
+          geometry: snapped,
+          lengthM: len,
+          roadClass: draft.roadClass,
+          lanes: draft.lanes,
+          widthM: draft.widthM,
+          arterial: draft.roadClass === "main",
+        },
       ],
       drawMode: "none",
     });
@@ -195,6 +242,63 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     set({ roads: [] });
     get().pushToast("Roads cleared.", "info");
   },
+
+  changeParcelLandUse: (id, use) =>
+    set({
+      parcels: get().parcels.map((p) =>
+        p.id === id ? { ...p, landUse: use } : p,
+      ),
+    }),
+
+  deleteParcel: (id) =>
+    set({
+      parcels: get().parcels.filter((p) => p.id !== id),
+      selectedId: null,
+    }),
+
+  updateParcelGeometry: (id, geometry) =>
+    set({
+      parcels: get().parcels.map((p) =>
+        p.id === id
+          ? { ...p, geometry, areaSqm: polygonArea(geometry) }
+          : p,
+      ),
+    }),
+
+  setRoadClass: (id, roadClass) =>
+    set({
+      roads: get().roads.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              roadClass,
+              lanes: ROAD_CLASS_DEFAULTS[roadClass].lanes,
+              widthM: computeRoadWidth(roadClass, ROAD_CLASS_DEFAULTS[roadClass].lanes),
+              arterial: roadClass === "main",
+            }
+          : r,
+      ),
+    }),
+
+  setRoadLanes: (id, lanes) =>
+    set({
+      roads: get().roads.map((r) =>
+        r.id === id
+          ? { ...r, lanes, widthM: computeRoadWidth(r.roadClass, lanes) }
+          : r,
+      ),
+    }),
+
+  setRoadWidth: (id, widthM) =>
+    set({
+      roads: get().roads.map((r) => (r.id === id ? { ...r, widthM } : r)),
+    }),
+
+  deleteRoad: (id) =>
+    set({
+      roads: get().roads.filter((r) => r.id !== id),
+      selectedId: null,
+    }),
 
   fillRoadGrid: (spacingM, angleDeg) => {
     const boundary = get().boundary;
@@ -326,8 +430,23 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       scenarioId: s.id,
       projectName: s.name,
       boundary: s.boundary,
-      parcels: s.parcels,
-      roads: s.roads,
+      // backfill fields added after older scenarios were saved
+      parcels: s.parcels.map((p) => ({
+        ...p,
+        landUse: p.landUse ?? "unassigned",
+      })),
+      roads: s.roads.map((r) => {
+        const roadClass: RoadClass =
+          r.roadClass ?? (r.arterial ? "main" : "service");
+        const lanes = r.lanes ?? ROAD_CLASS_DEFAULTS[roadClass].lanes;
+        return {
+          ...r,
+          roadClass,
+          lanes,
+          widthM: r.widthM ?? computeRoadWidth(roadClass, lanes),
+          arterial: r.arterial ?? roadClass === "main",
+        };
+      }),
       features: s.features,
       // merge with defaults so scenarios saved by older versions still work
       controls: { ...DEFAULT_CONTROLS, ...s.controls },
