@@ -371,6 +371,9 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     if (facilityZone) features = carveGreenZone(features, facilityZone);
   }
 
+  // Drop line-like sliver fragments left by clipping against angled/curved roads.
+  features = dropSlivers(features);
+
   // --- Compatibility optimization (thesis-style) ---
   // Improve land-use placement against the dependency matrix + radius of
   // influence, then report compatibility %, diversity and violation scores.
@@ -404,6 +407,59 @@ export function generateLayout(input: GenerationInput): GenerationResult {
 }
 
 // ---------- helpers ----------
+
+/**
+ * Land uses prone to thin slivers from boolean clipping. Sliver features of
+ * these uses render as bare outlines (MapLibre can't fill a ~zero-width
+ * polygon), so we drop them.
+ */
+const SLIVER_USES: ReadonlySet<LandUseType> = new Set([
+  "residential",
+  "commercial",
+  "industrial",
+  "green",
+  "unassigned",
+]);
+
+/** Drop a sliver feature whose average width is below this (metres). */
+const MIN_FEATURE_WIDTH_M = 1.5;
+
+/** Outer-ring perimeter in metres (cheap equirectangular approximation). */
+function outerPerimeterM(geom: Polygon | MultiPolygon): number {
+  const rings =
+    geom.type === "Polygon"
+      ? [geom.coordinates[0]]
+      : geom.coordinates.map((p) => p[0]);
+  let per = 0;
+  for (const ring of rings) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const a = ring[i];
+      const b = ring[i + 1];
+      const mLng = 111320 * Math.cos((a[1] * Math.PI) / 180);
+      const dx = (b[0] - a[0]) * mLng;
+      const dy = (b[1] - a[1]) * 110540;
+      per += Math.hypot(dx, dy);
+    }
+  }
+  return per;
+}
+
+/**
+ * Remove sliver features: long, near-zero-width fragments left by clipping
+ * plots/leftover against curved or angled roads. Mean width ≈ 2·area /
+ * perimeter, which is rotation-invariant, so genuine narrow-but-real plots
+ * survive while line-like slivers are dropped. Only generated, sliver-prone
+ * land uses are filtered — roads, facilities, locked and parcel features are
+ * left alone.
+ */
+function dropSlivers(features: PlanningFeature[]): PlanningFeature[] {
+  return features.filter((f) => {
+    if (!f.generated || f.locked || !SLIVER_USES.has(f.landUse)) return true;
+    const per = outerPerimeterM(f.geometry);
+    if (per <= 0) return false;
+    return (2 * f.areaSqm) / per >= MIN_FEATURE_WIDTH_M;
+  });
+}
 
 /** Land uses whose plots may be carved to make room for green zones. */
 const CARVEABLE: ReadonlySet<LandUseType> = new Set([
