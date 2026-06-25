@@ -133,25 +133,27 @@ export interface ParcelSubtype {
   depthM: number;
   areaSqm: number;
   gapM: number;
+  setbackM: number;
+  roadWidthM: number;
 }
 
 export const PARCEL_SUBTYPES: Partial<Record<LandUseType, ParcelSubtype[]>> = {
   residential: [
-    { id: "row-house", label: "Row houses", defaultSizing: "dimensions", widthM: 6, depthM: 18, areaSqm: 108, gapM: 0 },
-    { id: "private-home", label: "Private homes", defaultSizing: "dimensions", widthM: 15, depthM: 25, areaSqm: 375, gapM: 2 },
-    { id: "social-housing", label: "Social housing", defaultSizing: "dimensions", widthM: 8, depthM: 16, areaSqm: 128, gapM: 1 },
-    { id: "luxury-housing", label: "Luxury housing", defaultSizing: "area", widthM: 30, depthM: 40, areaSqm: 1200, gapM: 4 },
-    { id: "apartment-complex", label: "Apartment complexes", defaultSizing: "area", widthM: 40, depthM: 60, areaSqm: 2500, gapM: 5 },
+    { id: "row-house", label: "Row houses", defaultSizing: "dimensions", widthM: 6, depthM: 18, areaSqm: 108, gapM: 0, setbackM: 0.5, roadWidthM: 4 },
+    { id: "private-home", label: "Private homes", defaultSizing: "dimensions", widthM: 15, depthM: 25, areaSqm: 375, gapM: 2, setbackM: 2, roadWidthM: 6 },
+    { id: "social-housing", label: "Social housing", defaultSizing: "dimensions", widthM: 8, depthM: 16, areaSqm: 128, gapM: 1, setbackM: 1, roadWidthM: 5 },
+    { id: "luxury-housing", label: "Luxury housing", defaultSizing: "area", widthM: 30, depthM: 40, areaSqm: 1200, gapM: 4, setbackM: 3, roadWidthM: 6 },
+    { id: "apartment-complex", label: "Apartment complexes", defaultSizing: "area", widthM: 40, depthM: 60, areaSqm: 2500, gapM: 5, setbackM: 4, roadWidthM: 8 },
   ],
   commercial: [
-    { id: "retail-strip", label: "Retail strip", defaultSizing: "dimensions", widthM: 10, depthM: 25, areaSqm: 250, gapM: 0 },
-    { id: "shopping-mall", label: "Shopping mall", defaultSizing: "area", widthM: 80, depthM: 100, areaSqm: 8000, gapM: 6 },
-    { id: "mixed-use", label: "Mixed-use blocks", defaultSizing: "dimensions", widthM: 20, depthM: 30, areaSqm: 600, gapM: 3 },
+    { id: "retail-strip", label: "Retail strip", defaultSizing: "dimensions", widthM: 10, depthM: 25, areaSqm: 250, gapM: 0, setbackM: 0.5, roadWidthM: 6 },
+    { id: "shopping-mall", label: "Shopping mall", defaultSizing: "area", widthM: 80, depthM: 100, areaSqm: 8000, gapM: 6, setbackM: 5, roadWidthM: 8 },
+    { id: "mixed-use", label: "Mixed-use blocks", defaultSizing: "dimensions", widthM: 20, depthM: 30, areaSqm: 600, gapM: 3, setbackM: 2, roadWidthM: 6 },
   ],
   industrial: [
-    { id: "light-industrial", label: "Light industrial", defaultSizing: "area", widthM: 40, depthM: 50, areaSqm: 2000, gapM: 4 },
-    { id: "heavy-industrial", label: "Heavy industrial", defaultSizing: "area", widthM: 70, depthM: 70, areaSqm: 5000, gapM: 6 },
-    { id: "warehouse", label: "Warehouses", defaultSizing: "dimensions", widthM: 40, depthM: 60, areaSqm: 2400, gapM: 4 },
+    { id: "light-industrial", label: "Light industrial", defaultSizing: "area", widthM: 40, depthM: 50, areaSqm: 2000, gapM: 4, setbackM: 3, roadWidthM: 8 },
+    { id: "heavy-industrial", label: "Heavy industrial", defaultSizing: "area", widthM: 70, depthM: 70, areaSqm: 5000, gapM: 6, setbackM: 5, roadWidthM: 10 },
+    { id: "warehouse", label: "Warehouses", defaultSizing: "dimensions", widthM: 40, depthM: 60, areaSqm: 2400, gapM: 4, setbackM: 3, roadWidthM: 10 },
   ],
 };
 
@@ -184,6 +186,8 @@ export function defaultPlotParams(
     depthM: st.depthM,
     areaSqm: st.areaSqm,
     gapM: st.gapM,
+    setbackM: st.setbackM,
+    roadWidthM: st.roadWidthM,
   };
 }
 

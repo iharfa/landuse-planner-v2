@@ -115,7 +115,10 @@ function ParcelEditor() {
     s.parcels.find((p) => p.id === s.selectedId),
   );
   const plotCount = usePlanningStore(
-    (s) => s.features.filter((f) => f.parcelId === s.selectedId).length,
+    (s) =>
+      s.features.filter(
+        (f) => f.parcelId === s.selectedId && f.landUse !== "road",
+      ).length,
   );
   const changeParcelLandUse = usePlanningStore((s) => s.changeParcelLandUse);
   const deleteParcel = usePlanningStore((s) => s.deleteParcel);
@@ -235,14 +238,34 @@ function ParcelSubdivision({
         />
       )}
 
+      <div className="grid grid-cols-2 gap-2">
+        <LabeledNumber
+          label="Plot setback"
+          value={params.setbackM}
+          min={0}
+          max={20}
+          step={0.5}
+          suffix="m"
+          onChange={(v) => setParcelPlotParams(parcel.id, { setbackM: v })}
+        />
+        <LabeledNumber
+          label="Lateral gap"
+          value={params.gapM}
+          min={0}
+          max={20}
+          step={0.5}
+          suffix="m"
+          onChange={(v) => setParcelPlotParams(parcel.id, { gapM: v })}
+        />
+      </div>
       <LabeledNumber
-        label="Gap between plots"
-        value={params.gapM}
+        label="Access road width (between rows)"
+        value={params.roadWidthM}
         min={0}
-        max={20}
+        max={30}
         step={0.5}
         suffix="m"
-        onChange={(v) => setParcelPlotParams(parcel.id, { gapM: v })}
+        onChange={(v) => setParcelPlotParams(parcel.id, { roadWidthM: v })}
       />
 
       <div className="text-[11px] text-slate-400">
@@ -269,9 +292,10 @@ function ParcelSubdivision({
         </Button>
       )}
       <p className="text-[10px] text-slate-500 leading-snug">
-        Plots tile the parcel along its longest edge and are clipped to its
-        shape. They’re individual features — select one to change its use or
-        delete it.
+        Rows are separated by walkable access roads; each plot is inset by its
+        setback. Only full-size plots are kept, so edge slivers are dropped.
+        Plots and roads are individual features — select one to change its use
+        or delete it.
       </p>
     </Panel>
   );

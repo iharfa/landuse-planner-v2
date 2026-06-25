@@ -5,26 +5,33 @@ import { turf } from "@/lib/geometry/turfHelpers";
 /** Hard cap so a tiny plot size on a huge parcel can't lock up the browser. */
 export const MAX_PLOTS_PER_PARCEL = 3000;
 
+/** A plot is kept only if at least this fraction of its full area fits the
+ * parcel. Keeps plots uniform and drops clipped edge fragments / slivers. */
+const KEEP_FRACTION = 0.9;
+
 export interface SubdivisionResult {
   plots: Polygon[];
+  /** walkable access-road strips between plot rows, clipped to the parcel */
+  roads: Polygon[];
   /** true when the MAX_PLOTS cap was hit (result is truncated) */
   truncated: boolean;
 }
 
 /**
- * Subdivide a parcel polygon into a grid of plots.
+ * Subdivide a parcel polygon into a grid of uniform plots.
  *
- * The grid is oriented to the parcel's longest edge (so plots line up with the
- * dominant frontage rather than north/south), then each cell is clipped to the
- * parcel and edge slivers are dropped. All geometry work happens in a local
- * metric plane around the parcel centroid, so metre-based sizes are exact.
+ * The grid is oriented to the parcel's longest edge. Rows of plots are
+ * separated by a walkable access road; within a row plots are separated by a
+ * lateral gap; each plot is inset by a setback. Only plots whose full footprint
+ * fits the parcel are kept, so edge fragments and slivers are dropped. All work
+ * happens in a local metric plane around the centroid, so metre sizes are exact.
  */
 export function subdivideParcel(
   parcel: Polygon,
   params: ParcelPlotParams,
 ): SubdivisionResult {
   const ring = parcel.coordinates[0];
-  if (!ring || ring.length < 4) return { plots: [], truncated: false };
+  if (!ring || ring.length < 4) return { plots: [], roads: [], truncated: false };
 
   // --- local planar projection (metres) around the centroid ---
   const c = turf.centroid(turf.polygon(parcel.coordinates)).geometry
@@ -54,7 +61,17 @@ export function subdivideParcel(
     d = Math.max(1, params.depthM);
   }
   const gap = Math.max(0, params.gapM ?? 0);
-  const targetArea = w * d;
+  const road = Math.max(0, params.roadWidthM ?? 0);
+  // setback can't eat more than ~45% of the smaller side
+  const setback = Math.min(
+    Math.max(0, params.setbackM ?? 0),
+    Math.min(w, d) * 0.45,
+  );
+
+  const plotW = w - 2 * setback;
+  const plotD = d - 2 * setback;
+  const plotArea = plotW * plotD;
+  if (plotArea <= 0) return { plots: [], roads: [], truncated: false };
 
   // --- orient the grid to the parcel's longest edge ---
   const localRing = ring.map(toLocal);
@@ -96,52 +113,81 @@ export function subdivideParcel(
     if (y > maxY) maxY = y;
   }
 
-  // --- tile the bounding box and clip each cell to the parcel ---
+  // convert a rotated-local polygon ring set back to geographic coordinates
+  const ringsToGeo = (rings: Position[][]): Position[][] =>
+    rings.map((r) => r.map((pt) => toGeo(unrot([pt[0], pt[1]]))));
+
+  // clip a rotated-local rectangle to the parcel; return kept geo polygons
+  const clipRect = (
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    minKeepArea: number,
+  ): Polygon[] => {
+    const rect = turf.polygon([
+      [
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x0, y1],
+        [x0, y0],
+      ],
+    ]);
+    let piece: ReturnType<typeof turf.intersect>;
+    try {
+      piece = turf.intersect(turf.featureCollection([rect, parcelRot]));
+    } catch {
+      piece = null;
+    }
+    if (!piece) return [];
+    const polys =
+      piece.geometry.type === "Polygon"
+        ? [piece.geometry.coordinates]
+        : piece.geometry.coordinates;
+    const out: Polygon[] = [];
+    for (const rings of polys) {
+      if (planarArea(rings[0]) < minKeepArea) continue;
+      out.push({ type: "Polygon", coordinates: ringsToGeo(rings) });
+    }
+    return out;
+  };
+
+  // --- tile rows (separated by access roads) of plots (separated by gaps) ---
   const plots: Polygon[] = [];
+  const roads: Polygon[] = [];
   let truncated = false;
   const stepX = w + gap;
-  const stepY = d + gap;
+  const stepY = d + road;
 
   for (let y = minY; y < maxY && !truncated; y += stepY) {
-    for (let x = minX; x < maxX; x += stepX) {
+    // plots in this row
+    for (let x = minX; x + w <= maxX + 1e-6; x += stepX) {
       if (plots.length >= MAX_PLOTS_PER_PARCEL) {
         truncated = true;
         break;
       }
-      const rect = turf.polygon([
-        [
-          [x, y],
-          [x + w, y],
-          [x + w, y + d],
-          [x, y + d],
-          [x, y],
-        ],
-      ]);
-      let piece: ReturnType<typeof turf.intersect>;
-      try {
-        piece = turf.intersect(turf.featureCollection([rect, parcelRot]));
-      } catch {
-        piece = null;
-      }
-      if (!piece) continue;
-
-      const polys =
-        piece.geometry.type === "Polygon"
-          ? [piece.geometry.coordinates]
-          : piece.geometry.coordinates;
-
-      for (const rings of polys) {
-        const area = planarArea(rings[0]);
-        if (area < targetArea * 0.4) continue; // drop edge slivers
-        const geoRings = rings.map((r) =>
-          r.map((pt) => toGeo(unrot([pt[0], pt[1]]))),
-        );
-        plots.push({ type: "Polygon", coordinates: geoRings });
-      }
+      // inset the plot inside its cell by the setback
+      const px0 = x + setback;
+      const py0 = y + setback;
+      const kept = clipRect(
+        px0,
+        py0,
+        px0 + plotW,
+        py0 + plotD,
+        plotArea * KEEP_FRACTION,
+      );
+      plots.push(...kept);
+    }
+    // access road strip between this row and the next (skip if it would be
+    // the trailing strip past the parcel)
+    if (road > 0 && y + d < maxY) {
+      const lane = clipRect(minX, y + d, maxX, y + d + road, road * 4);
+      roads.push(...lane);
     }
   }
 
-  return { plots, truncated };
+  return { plots, roads, truncated };
 }
 
 function closeRing(coords: [number, number][]): [number, number][] {

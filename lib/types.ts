@@ -28,8 +28,12 @@ export interface ParcelPlotParams {
   depthM: number;
   /** target plot area in m² (sizing === "area") */
   areaSqm: number;
-  /** gap / access spacing between adjacent plots, in metres */
+  /** lateral gap between adjacent plots in the same row, in metres */
   gapM: number;
+  /** inset applied to every plot inside its cell, in metres */
+  setbackM: number;
+  /** width of the walkable access road inserted between plot rows (0 = none) */
+  roadWidthM: number;
 }
 
 /** User-drawn main planning boundary. */

@@ -317,7 +317,10 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       get().pushToast("This land use can’t be subdivided into plots.", "error");
       return;
     }
-    const { plots, truncated } = subdivideParcelGeom(parcel.geometry, params);
+    const { plots, roads, truncated } = subdivideParcelGeom(
+      parcel.geometry,
+      params,
+    );
     if (plots.length === 0) {
       get().pushToast("No plots fit — try smaller plot sizes.", "error");
       return;
@@ -335,9 +338,22 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       subtype: params.subtypeId,
       label,
     }));
+    // walkable access roads between plot rows
+    const roadFeatures: PlanningFeature[] = roads.map((geometry) => ({
+      id: makeId("plot-road"),
+      landUse: "road" as LandUseType,
+      geometry,
+      areaSqm: polygonArea(geometry),
+      locked: false,
+      generated: false,
+      parcelId: id,
+      subtype: params.subtypeId,
+      label: "Access road",
+    }));
     set({
       features: [
         ...get().features.filter((f) => f.parcelId !== id),
+        ...roadFeatures,
         ...plotFeatures,
       ],
     });
