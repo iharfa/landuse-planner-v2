@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Compass, ArrowLeft } from "lucide-react";
+import { Compass, ArrowLeft, MessageCircle } from "lucide-react";
 
 export const metadata = {
   title: "About — Island Layout Studio",
@@ -32,6 +32,26 @@ export default function AboutPage() {
           and maps use free public satellite tiles (Esri World Imagery) with an
           OpenStreetMap fallback — no API keys, no backend, no login.
         </p>
+
+        <div className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-2 text-amber-200">
+            <span className="text-lg">🚧</span>
+            <span className="font-semibold">This project is a work in progress</span>
+          </div>
+          <p className="mt-2 text-sm text-amber-100/80 leading-relaxed">
+            Features are still evolving and things may change or break. If you
+            have any comments or feedback, I’d love to hear them — send them over
+            on WhatsApp.
+          </p>
+          <a
+            href="https://wa.me/9609690600"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400"
+          >
+            <MessageCircle className="h-4 w-4" /> Feedback on WhatsApp: +960 969 0600
+          </a>
+        </div>
         <h2 className="mt-8 text-lg font-semibold text-slate-100">
           Known limitations
         </h2>

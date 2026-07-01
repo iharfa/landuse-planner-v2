@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { usePlanningStore } from "@/store/usePlanningStore";
-import { X, Compass } from "lucide-react";
+import { X, Compass, MessageCircle } from "lucide-react";
 
 const STEPS = [
   "Draw island boundary",
@@ -36,6 +36,19 @@ export function WelcomePanel() {
         A futuristic urban planning studio for Maldives-style islands. Sketch the
         land, then generate a complete land-use layout.
       </p>
+      <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90 leading-snug">
+        🚧 This project is a work in progress. Got comments or feedback? Message
+        me on WhatsApp{" "}
+        <a
+          href="https://wa.me/9609690600"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-semibold text-emerald-300 hover:text-emerald-200"
+        >
+          <MessageCircle className="h-3 w-3" /> +960 969 0600
+        </a>
+        .
+      </div>
       <ol className="mt-4 space-y-2">
         {STEPS.map((step, i) => (
           <li key={step} className="flex items-center gap-3 text-sm text-slate-200">
