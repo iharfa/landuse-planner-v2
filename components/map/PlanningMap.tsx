@@ -77,7 +77,15 @@ export function PlanningMap() {
       setupDraw(map);
       setReady(true);
       pushData();
+      // ensure the map matches its (possibly late-sized) container so all tiles
+      // in view are requested, not just the initial viewport
+      map.resize();
     });
+
+    // keep the map sized to its container (fixes partial/single-tile renders
+    // when the container grows after the map is created)
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
 
     map.on("click", (e) => {
       const st = store.getState();
@@ -132,6 +140,7 @@ export function PlanningMap() {
     });
 
     return () => {
+      resizeObserver.disconnect();
       drawRef.current?.stop();
       map.remove();
       mapRef.current = null;

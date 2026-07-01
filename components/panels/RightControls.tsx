@@ -3,6 +3,7 @@
 import { usePlanningStore } from "@/store/usePlanningStore";
 import {
   Panel,
+  CollapsiblePanel,
   LabeledSlider,
   LabeledNumber,
   Toggle,
@@ -22,7 +23,11 @@ export function RightControls() {
 
   return (
     <div className="flex flex-col gap-3 w-72">
-      <Panel title="Planning controls" icon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
+      <CollapsiblePanel
+        title="Planning controls"
+        icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+        defaultOpen={false}
+      >
         <Toggle
           label="Auto-generate on change"
           checked={autoGenerate}
@@ -169,7 +174,7 @@ export function RightControls() {
           ]}
           onChange={(v) => setControls({ walkability: v })}
         />
-      </Panel>
+      </CollapsiblePanel>
 
       <Panel title="Population rules" icon={<Users className="h-3.5 w-3.5" />}>
         <LabeledNumber
