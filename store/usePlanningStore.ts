@@ -70,6 +70,8 @@ interface PlanningState {
   placementPreset: string | null;
   /** rotation (deg) applied to placed facility blocks */
   placementRotation: number;
+  /** surround/buffer (m) added around a placed facility's playing area */
+  placementBufferM: number;
   /** whether the left tool drawer is expanded */
   leftPanelOpen: boolean;
   /** land use applied to the next parcel drawn */
@@ -92,6 +94,7 @@ interface PlanningState {
   setRoadDraft: (patch: Partial<{ roadClass: RoadClass; lanes: number; widthM: number }>) => void;
   selectPlacement: (presetId: string | null) => void;
   setPlacementRotation: (deg: number) => void;
+  setPlacementBufferM: (m: number) => void;
   placeFacility: (at: [number, number]) => void;
   setLeftPanelOpen: (v: boolean) => void;
   setBasemap: (id: BasemapId) => void;
@@ -176,6 +179,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   selectedId: null,
   placementPreset: null,
   placementRotation: 0,
+  placementBufferM: 5,
   leftPanelOpen: true,
   parcelDraftUse: "residential",
   roadDraft: { roadClass: "main", lanes: 4, widthM: computeRoadWidth("main", 4) },
@@ -205,24 +209,31 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     set({ roadDraft: next });
   },
 
-  selectPlacement: (presetId) =>
+  selectPlacement: (presetId) => {
+    const preset = findSportsPreset(presetId ?? "");
     set({
       placementPreset: presetId,
       drawMode: presetId ? "place" : "none",
       selectedId: null,
-    }),
+      ...(preset ? { placementBufferM: preset.bufferM } : {}),
+    });
+  },
 
   setPlacementRotation: (deg) => set({ placementRotation: deg }),
+
+  setPlacementBufferM: (m) => set({ placementBufferM: Math.max(0, m) }),
 
   setLeftPanelOpen: (v) => set({ leftPanelOpen: v }),
 
   placeFacility: (at) => {
     const preset = findSportsPreset(get().placementPreset ?? "");
     if (!preset) return;
+    // the placed lot is the playing area plus a surround/buffer on every side
+    const buffer = Math.max(0, get().placementBufferM);
     const geometry = orientedRectMeters(
       at,
-      preset.lengthM,
-      preset.widthM,
+      preset.lengthM + 2 * buffer,
+      preset.widthM + 2 * buffer,
       get().placementRotation,
     );
     const feature: PlanningFeature = {

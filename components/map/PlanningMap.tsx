@@ -14,14 +14,22 @@ import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { usePlanningStore } from "@/store/usePlanningStore";
 import { BASEMAPS } from "@/lib/map/basemaps";
-import { LAND_USE_COLORS, ROAD_CLASS_DEFAULTS } from "@/lib/generation/constants";
-import { turf } from "@/lib/geometry/turfHelpers";
+import {
+  LAND_USE_COLORS,
+  ROAD_CLASS_DEFAULTS,
+  findSportsPreset,
+} from "@/lib/generation/constants";
+import { pitchMarkings } from "@/lib/generation/pitchMarkings";
+import { turf, orientedRectMeters } from "@/lib/geometry/turfHelpers";
 import { MapControls } from "./MapControls";
 
 const SRC_FEATURES = "ils-features";
 const SRC_BOUNDARY = "ils-boundary";
 const SRC_PARCELS = "ils-parcels";
 const SRC_ROADS = "ils-roads";
+const SRC_SPORT_PITCH = "ils-sport-pitch";
+const SRC_SPORT_MARKINGS = "ils-sport-markings";
+const SRC_PLACE_PREVIEW = "ils-place-preview";
 
 export function PlanningMap() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -50,9 +58,15 @@ export function PlanningMap() {
       (window as unknown as { __map?: maplibregl.Map }).__map = map;
     }
 
-    map.on("mousemove", (e) =>
-      setCoords([e.lngLat.lng, e.lngLat.lat]),
-    );
+    map.on("mousemove", (e) => {
+      setCoords([e.lngLat.lng, e.lngLat.lat]);
+      updatePlacePreview(map, [e.lngLat.lng, e.lngLat.lat]);
+      // MapLibre resets the canvas cursor on pointer events, so re-assert the
+      // placement crosshair here each move while in place mode.
+      if (store.getState().drawMode === "place") {
+        map.getCanvas().style.cursor = "crosshair";
+      }
+    });
     map.on("moveend", () => {
       const c = map.getCenter();
       store.getState().setMapView([c.lng, c.lat], map.getZoom());
@@ -187,9 +201,20 @@ export function PlanningMap() {
     } else if (drawMode === "ring") {
       draw.setMode("circle");
     } else {
-      // idle / select / merge: terra-draw stays inactive
+      // idle / select / merge / place: terra-draw stays inactive
       draw.clear();
       draw.setMode("static");
+    }
+    // placement cursor + clear the preview when leaving place mode
+    const map = mapRef.current;
+    if (map) {
+      map.getCanvas().style.cursor = drawMode === "place" ? "crosshair" : "";
+      if (drawMode !== "place") {
+        const src = map.getSource(SRC_PLACE_PREVIEW) as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        src?.setData(fc([]));
+      }
     }
   }, [drawMode]);
 
@@ -251,6 +276,34 @@ export function PlanningMap() {
         ),
       ),
     );
+
+    // derived sports pitch + line markings for placed facilities
+    const pitchSrc = map.getSource(SRC_SPORT_PITCH) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    const markSrc = map.getSource(SRC_SPORT_MARKINGS) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (pitchSrc && markSrc) {
+      const sports = s.features.filter(
+        (f) =>
+          f.landUse === "recreation" &&
+          f.subtype &&
+          findSportsPreset(f.subtype) &&
+          s.layerVisible["recreation"] !== false,
+      );
+      const pitchFeats: Feature[] = [];
+      const markFeats: Feature[] = [];
+      for (const f of sports) {
+        const { center, rotDeg } = deriveCenterRotation(f.geometry as Geometry);
+        const ov = sportOverlay(center, rotDeg, f.subtype!);
+        if (!ov) continue;
+        pitchFeats.push(ov.pitch);
+        markFeats.push(...ov.markings);
+      }
+      pitchSrc.setData(fc(pitchFeats));
+      markSrc.setData(fc(markFeats));
+    }
 
     // selected outline filters (features, parcels, roads share one selectedId)
     const sel = s.selectedId ?? "__none__";
@@ -335,6 +388,9 @@ function addOverlayLayers(map: maplibregl.Map) {
   ensureSource(map, SRC_BOUNDARY);
   ensureSource(map, SRC_PARCELS);
   ensureSource(map, SRC_ROADS);
+  ensureSource(map, SRC_SPORT_PITCH);
+  ensureSource(map, SRC_SPORT_MARKINGS);
+  ensureSource(map, SRC_PLACE_PREVIEW);
 
   if (!map.getLayer("ils-features-fill")) {
     map.addLayer({
@@ -517,6 +573,58 @@ function addOverlayLayers(map: maplibregl.Map) {
       paint: { "line-color": "#22d3ee", "line-width": 5, "line-opacity": 0.6 },
     });
   }
+  // sports pitch fill (grass) beneath white line markings
+  if (!map.getLayer("ils-sport-pitch-fill")) {
+    map.addLayer({
+      id: "ils-sport-pitch-fill",
+      type: "fill",
+      source: SRC_SPORT_PITCH,
+      paint: { "fill-color": "#3f9b46", "fill-opacity": 0.85 },
+    });
+  }
+  if (!map.getLayer("ils-sport-markings-line")) {
+    map.addLayer({
+      id: "ils-sport-markings-line",
+      type: "line",
+      source: SRC_SPORT_MARKINGS,
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, 0.6, 19, 2],
+        "line-opacity": 0.95,
+      },
+    });
+  }
+  // placement preview (follows the cursor in "place" mode)
+  if (!map.getLayer("ils-place-preview-fill")) {
+    map.addLayer({
+      id: "ils-place-preview-fill",
+      type: "fill",
+      source: SRC_PLACE_PREVIEW,
+      filter: ["==", ["get", "kind"], "lot"],
+      paint: { "fill-color": "#22d3ee", "fill-opacity": 0.15 },
+    });
+  }
+  if (!map.getLayer("ils-place-preview-pitch")) {
+    map.addLayer({
+      id: "ils-place-preview-pitch",
+      type: "fill",
+      source: SRC_PLACE_PREVIEW,
+      filter: ["==", ["get", "kind"], "pitch"],
+      paint: { "fill-color": "#3f9b46", "fill-opacity": 0.4 },
+    });
+  }
+  if (!map.getLayer("ils-place-preview-line")) {
+    map.addLayer({
+      id: "ils-place-preview-line",
+      type: "line",
+      source: SRC_PLACE_PREVIEW,
+      paint: {
+        "line-color": "#22d3ee",
+        "line-width": 1.5,
+        "line-dasharray": [2, 1],
+      },
+    });
+  }
 }
 
 function ensureSource(map: maplibregl.Map, id: string) {
@@ -531,6 +639,96 @@ function fc(features: Feature[]): FeatureCollection {
 
 function feat(geometry: Geometry, properties: Record<string, unknown>): Feature {
   return { type: "Feature", geometry, properties };
+}
+
+function lineFeat(coords: Position[]): Feature {
+  return {
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: coords },
+    properties: {},
+  };
+}
+
+/** Centre [lng,lat] and orientation (deg) of a rectangle-like polygon. */
+function deriveCenterRotation(geom: Geometry): {
+  center: Position;
+  rotDeg: number;
+} {
+  const ring =
+    geom.type === "Polygon"
+      ? geom.coordinates[0]
+      : (geom as { coordinates: Position[][][] }).coordinates[0][0];
+  const c0 = ring[0];
+  const c1 = ring[1];
+  const center: Position = [
+    (ring[0][0] + ring[2][0]) / 2,
+    (ring[0][1] + ring[2][1]) / 2,
+  ];
+  const mLng = 111320 * Math.cos((center[1] * Math.PI) / 180);
+  const dx = (c1[0] - c0[0]) * mLng;
+  const dy = (c1[1] - c0[1]) * 110540;
+  return { center, rotDeg: (Math.atan2(dy, dx) * 180) / Math.PI };
+}
+
+/** Project a local-metre point (rotated) to lng/lat around a centre. */
+function localToGeo(center: Position, rotRad: number, p: [number, number]): Position {
+  const mLng = 111320 * Math.cos((center[1] * Math.PI) / 180);
+  const mLat = 110540;
+  const rx = p[0] * Math.cos(rotRad) - p[1] * Math.sin(rotRad);
+  const ry = p[0] * Math.sin(rotRad) + p[1] * Math.cos(rotRad);
+  return [center[0] + rx / mLng, center[1] + ry / mLat];
+}
+
+/** Build the pitch polygon + line-marking features for a facility. */
+function sportOverlay(
+  center: Position,
+  rotDeg: number,
+  presetId: string,
+): { pitch: Feature; markings: Feature[] } | null {
+  const preset = findSportsPreset(presetId);
+  if (!preset) return null;
+  const rotRad = (rotDeg * Math.PI) / 180;
+  const pitch = feat(
+    orientedRectMeters(center, preset.lengthM, preset.widthM, rotDeg),
+    {},
+  );
+  const markings = pitchMarkings(presetId, preset.lengthM, preset.widthM).map(
+    (line) => lineFeat(line.map((pt) => localToGeo(center, rotRad, pt))),
+  );
+  return { pitch, markings };
+}
+
+/** Update the placement-preview source to follow the cursor in "place" mode. */
+function updatePlacePreview(map: maplibregl.Map, at: Position) {
+  const src = map.getSource(SRC_PLACE_PREVIEW) as
+    | maplibregl.GeoJSONSource
+    | undefined;
+  if (!src) return;
+  const st = usePlanningStore.getState();
+  if (st.drawMode !== "place" || !st.placementPreset) {
+    src.setData(fc([]));
+    return;
+  }
+  const preset = findSportsPreset(st.placementPreset);
+  if (!preset) {
+    src.setData(fc([]));
+    return;
+  }
+  const buffer = Math.max(0, st.placementBufferM);
+  const lot = orientedRectMeters(
+    at,
+    preset.lengthM + 2 * buffer,
+    preset.widthM + 2 * buffer,
+    st.placementRotation,
+  );
+  const ov = sportOverlay(at, st.placementRotation, st.placementPreset);
+  const feats: Feature[] = [feat(lot, { kind: "lot" })];
+  if (ov) {
+    feats.push(feat(ov.pitch.geometry, { kind: "pitch" }));
+    for (const m of ov.markings)
+      feats.push({ ...m, properties: { kind: "mark" } });
+  }
+  src.setData(fc(feats));
 }
 
 /**

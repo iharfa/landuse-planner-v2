@@ -15,7 +15,6 @@ import {
   Grid2x2,
   Spline,
   MousePointer2,
-  Star,
   RefreshCw,
   Trash2,
   Combine,
@@ -157,6 +156,8 @@ function SportsPalette() {
   const selectPlacement = usePlanningStore((s) => s.selectPlacement);
   const rotation = usePlanningStore((s) => s.placementRotation);
   const setRotation = usePlanningStore((s) => s.setPlacementRotation);
+  const buffer = usePlanningStore((s) => s.placementBufferM);
+  const setBuffer = usePlanningStore((s) => s.setPlacementBufferM);
   const placing = drawMode === "place";
   const active = SPORTS_PRESETS.find((p) => p.id === placementPreset);
 
@@ -192,6 +193,15 @@ function SportsPalette() {
         step={5}
         suffix="°"
         onChange={setRotation}
+      />
+      <LabeledSlider
+        label="Surround / buffer"
+        value={buffer}
+        min={0}
+        max={20}
+        step={0.5}
+        suffix="m"
+        onChange={setBuffer}
       />
       {placing && active ? (
         <p className="text-[11px] text-cyan-300/90 leading-snug">
@@ -389,7 +399,14 @@ export function LeftToolbar() {
           boundary ? "animate-btn-glow animate-btn-sheen" : ""
         }`}
       >
-        <Star className="h-5 w-5 text-yellow-300 fill-yellow-300 animate-star-shine" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://fonts.gstatic.com/s/e/notoemoji/latest/2728/emoji.svg"
+          alt=""
+          width={20}
+          height={20}
+          className="h-5 w-5 animate-star-shine"
+        />
         Generate layout
       </button>
 

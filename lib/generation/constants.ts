@@ -201,17 +201,23 @@ export interface SportsPreset {
   label: string;
   lengthM: number;
   widthM: number;
+  /**
+   * Default surround/run-off buffer (metres) added on every side — space for
+   * the perimeter boundary, team benches, lighting and safety run-off. Based
+   * on typical governing-body run-off recommendations.
+   */
+  bufferM: number;
 }
 
 export const SPORTS_PRESETS: SportsPreset[] = [
-  { id: "football", label: "Football Pitch", lengthM: 105, widthM: 68 },
-  { id: "futsal", label: "Futsal Pitch", lengthM: 40, widthM: 20 },
-  { id: "basketball", label: "Basketball Court", lengthM: 28, widthM: 15 },
-  { id: "basketball-half", label: "Basketball Half Court", lengthM: 15, widthM: 14 },
-  { id: "netball", label: "Netball Court", lengthM: 30.5, widthM: 15.25 },
-  { id: "tennis", label: "Tennis Court", lengthM: 23.77, widthM: 10.97 },
-  { id: "volleyball", label: "Volleyball Court", lengthM: 18, widthM: 9 },
-  { id: "badminton", label: "Badminton Court", lengthM: 13.4, widthM: 6.1 },
+  { id: "football", label: "Football Pitch", lengthM: 105, widthM: 68, bufferM: 5 },
+  { id: "futsal", label: "Futsal Pitch", lengthM: 40, widthM: 20, bufferM: 2 },
+  { id: "basketball", label: "Basketball Court", lengthM: 28, widthM: 15, bufferM: 2 },
+  { id: "basketball-half", label: "Basketball Half Court", lengthM: 15, widthM: 14, bufferM: 2 },
+  { id: "netball", label: "Netball Court", lengthM: 30.5, widthM: 15.25, bufferM: 3 },
+  { id: "tennis", label: "Tennis Court", lengthM: 23.77, widthM: 10.97, bufferM: 4 },
+  { id: "volleyball", label: "Volleyball Court", lengthM: 18, widthM: 9, bufferM: 3 },
+  { id: "badminton", label: "Badminton Court", lengthM: 13.4, widthM: 6.1, bufferM: 2 },
 ];
 
 export function findSportsPreset(id: string): SportsPreset | undefined {
