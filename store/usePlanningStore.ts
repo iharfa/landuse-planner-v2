@@ -70,6 +70,8 @@ interface PlanningState {
   placementPreset: string | null;
   /** rotation (deg) applied to placed facility blocks */
   placementRotation: number;
+  /** whether the left tool drawer is expanded */
+  leftPanelOpen: boolean;
   /** land use applied to the next parcel drawn */
   parcelDraftUse: LandUseType;
   /** class / lanes applied to the next road drawn */
@@ -91,6 +93,7 @@ interface PlanningState {
   selectPlacement: (presetId: string | null) => void;
   setPlacementRotation: (deg: number) => void;
   placeFacility: (at: [number, number]) => void;
+  setLeftPanelOpen: (v: boolean) => void;
   setBasemap: (id: BasemapId) => void;
   setMapView: (center: [number, number], zoom: number) => void;
   toggleLayer: (use: LandUseType) => void;
@@ -173,6 +176,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   selectedId: null,
   placementPreset: null,
   placementRotation: 0,
+  leftPanelOpen: true,
   parcelDraftUse: "residential",
   roadDraft: { roadClass: "main", lanes: 4, widthM: computeRoadWidth("main", 4) },
   basemap: "satellite",
@@ -209,6 +213,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
     }),
 
   setPlacementRotation: (deg) => set({ placementRotation: deg }),
+
+  setLeftPanelOpen: (v) => set({ leftPanelOpen: v }),
 
   placeFacility: (at) => {
     const preset = findSportsPreset(get().placementPreset ?? "");

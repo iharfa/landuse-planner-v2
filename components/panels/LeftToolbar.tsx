@@ -24,7 +24,6 @@ import {
   PenTool,
   Circle,
   PanelLeftClose,
-  PanelLeftOpen,
   Wrench,
 } from "lucide-react";
 import type { DrawMode, LandUseType, RoadClass } from "@/lib/types";
@@ -224,35 +223,22 @@ export function LeftToolbar() {
   const roadCount = usePlanningStore((s) => s.roads.length);
   const clearRoads = usePlanningStore((s) => s.clearRoads);
   const fillRoadGrid = usePlanningStore((s) => s.fillRoadGrid);
+  const setLeftPanelOpen = usePlanningStore((s) => s.setLeftPanelOpen);
 
   const [gridSpacing, setGridSpacing] = useState(90);
   const [gridAngle, setGridAngle] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
 
   const toggle = (m: DrawMode) => setDrawMode(drawMode === m ? "none" : m);
 
-  // collapsed: just a compact bar with an expand button
-  if (collapsed) {
-    return (
-      <button
-        onClick={() => setCollapsed(false)}
-        title="Expand tools"
-        className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 backdrop-blur-md px-3 py-2 text-sm text-slate-200 shadow-lg hover:bg-slate-800/80"
-      >
-        <PanelLeftOpen className="h-4 w-4 text-cyan-300" /> Tools
-      </button>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3 w-64">
+    <div className="flex flex-col gap-3 w-full">
       {/* single toolbar header with collapse toggle */}
       <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/80 backdrop-blur-md px-3 py-2 shadow-lg">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-200">
           <Wrench className="h-4 w-4 text-cyan-300" /> Studio tools
         </div>
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={() => setLeftPanelOpen(false)}
           title="Collapse tools"
           className="text-slate-400 hover:text-cyan-300"
         >
