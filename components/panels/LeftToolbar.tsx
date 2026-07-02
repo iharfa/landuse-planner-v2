@@ -72,6 +72,8 @@ const PARCEL_USES: LandUseType[] = [
   "industrial",
   "school",
   "mosque",
+  "health",
+  "community",
   "utility",
   "recreation",
   "green",

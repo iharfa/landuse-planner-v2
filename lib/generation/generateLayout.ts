@@ -204,88 +204,125 @@ export function generateLayout(input: GenerationInput): GenerationResult {
     }
   }
 
-  // --- Facilities: convert residential plots into facility blocks ---
+  // --- Facilities: distribute across residential catchments for access ---
   const facilityPlan = computeFacilityPlan(controls, developableArea);
   const facilityFeatures: PlanningFeature[] = [];
   const consumed = new Set<string>();
+  const catchments = controls.catchments ?? {
+    school: 800,
+    mosque: 500,
+    health: 1500,
+    recreation: 600,
+    community: 800,
+  };
 
-  function carveFacility(
-    count: number,
-    use: LandUseType,
-    targetArea: number,
-    anchor: Position,
-  ) {
-    // Average residential plot area, used to bound how many plots a facility
-    // may absorb so a large reserve target can never eat the whole pool.
+  // Cache each residential plot's centroid once (used by both coverage
+  // selection and carving).
+  const resCentroidById = new Map<string, Position>();
+  for (const p of residentialPool) {
+    resCentroidById.set(p.id, centroidOf(p.geometry as Polygon));
+  }
+
+  // Carve a single facility from the residential plots nearest an anchor.
+  function carveOneFacility(use: LandUseType, targetArea: number, anchor: Position) {
+    if (consumed.size >= residentialPool.length * 0.4) return;
+    if (residentialPool.length - consumed.size <= minResidential) return;
     const avgArea =
       residentialPool.length > 0
         ? residentialPool.reduce((s, p) => s + p.areaSqm, 0) /
           residentialPool.length
         : 1;
-    const maxPlotsPerFacility = Math.max(
-      1,
-      Math.min(10, Math.ceil(targetArea / avgArea)),
-    );
-    for (let k = 0; k < count; k++) {
-      // never consume more than ~40% of the residential pool on facilities
-      if (consumed.size >= residentialPool.length * 0.4) break;
-      // and never drop the residential count below the requested minimum
-      if (residentialPool.length - consumed.size <= minResidential) break;
-      const pool = residentialPool.filter((p) => !consumed.has(p.id));
-      if (pool.length === 0) break;
-      // nearest residential plots to the anchor, accumulate to target area
-      const sorted = pool
-        .map((p) => ({
-          p,
-          d: turf.distance(
-            turf.centroid(toFeature(p.geometry)),
-            turf.point(anchor),
-            { units: "meters" },
-          ),
-        }))
-        .sort((a, b) => a.d - b.d);
-      const group: PlanningFeature[] = [];
-      let area = 0;
-      for (const { p } of sorted) {
-        group.push(p);
-        area += p.areaSqm;
-        if (area >= targetArea || group.length >= maxPlotsPerFacility) break;
-      }
-      if (group.length === 0) break;
-      group.forEach((p) => consumed.add(p.id));
-      const merged = safeUnion(group.map((p) => toFeature(p.geometry)));
-      if (!merged) continue;
-      facilityFeatures.push({
-        id: makeId(use),
-        landUse: use,
-        geometry: merged.geometry,
-        areaSqm: polygonArea(merged.geometry),
-        locked: false,
-        generated: true,
-        label: capitalize(use),
-      });
+    const maxPlots = Math.max(1, Math.min(12, Math.ceil(targetArea / avgArea)));
+    const pool = residentialPool.filter((p) => !consumed.has(p.id));
+    if (pool.length === 0) return;
+    const sorted = pool
+      .map((p) => ({ p, d: metersBetween(resCentroidById.get(p.id)!, anchor) }))
+      .sort((a, b) => a.d - b.d);
+    const group: PlanningFeature[] = [];
+    let area = 0;
+    for (const { p } of sorted) {
+      group.push(p);
+      area += p.areaSqm;
+      if (area >= targetArea || group.length >= maxPlots) break;
+    }
+    if (group.length === 0) return;
+    group.forEach((p) => consumed.add(p.id));
+    const merged = safeUnion(group.map((p) => toFeature(p.geometry)));
+    if (!merged) return;
+    facilityFeatures.push({
+      id: makeId(use),
+      landUse: use,
+      geometry: merged.geometry,
+      areaSqm: polygonArea(merged.geometry),
+      locked: false,
+      generated: true,
+      label: capitalize(use),
+    });
+  }
+
+  // Place `count` facilities of a type at anchors that maximise residential
+  // coverage within the catchment radius — so services are spread out and
+  // reachable, rather than clustered at the island centre.
+  function distributeFacility(
+    use: LandUseType,
+    count: number,
+    targetArea: number,
+    radiusM: number,
+  ) {
+    if (count <= 0) return;
+    const pool = residentialPool.filter((p) => !consumed.has(p.id));
+    if (pool.length === 0) return;
+    const lat0 = activityCenter[1];
+    const mLng = 111320 * Math.cos((lat0 * Math.PI) / 180);
+    const mLat = 110540;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const areas: number[] = [];
+    for (const p of pool) {
+      const c = resCentroidById.get(p.id)!;
+      xs.push((c[0] - activityCenter[0]) * mLng);
+      ys.push((c[1] - activityCenter[1]) * mLat);
+      areas.push(p.areaSqm);
+    }
+    const idxs = coverageAnchorIndices(xs, ys, areas, radiusM, count);
+    for (const i of idxs) {
+      carveOneFacility(use, targetArea, resCentroidById.get(pool[i].id)!);
     }
   }
 
-  // schools near residential mass, mosques near center, recreation distributed,
-  // utilities near edge (farthest point). Average the residential centroids
-  // (cheap) instead of unioning all plots.
-  const resCentroid: Position =
-    residentialPool.length > 0
-      ? averageCentroid(residentialPool)
-      : activityCenter;
-
-  carveFacility(facilityPlan.schools, "school", FACILITY_RULES.schoolAreaSqm, resCentroid);
-  carveFacility(facilityPlan.mosques, "mosque", FACILITY_RULES.mosqueAreaSqm, activityCenter);
-  carveFacility(
-    facilityPlan.recreation,
+  distributeFacility(
+    "school",
+    facilityPlan.schools,
+    FACILITY_RULES.schoolAreaSqm,
+    catchments.school,
+  );
+  distributeFacility(
+    "mosque",
+    facilityPlan.mosques,
+    FACILITY_RULES.mosqueAreaSqm,
+    catchments.mosque,
+  );
+  distributeFacility(
+    "health",
+    facilityPlan.health,
+    FACILITY_RULES.healthAreaSqm,
+    catchments.health,
+  );
+  distributeFacility(
     "recreation",
+    facilityPlan.recreation,
     FACILITY_RULES.recreationAreaSqm,
-    resCentroid,
+    catchments.recreation,
+  );
+  distributeFacility(
+    "community",
+    facilityPlan.community,
+    FACILITY_RULES.communityAreaSqm,
+    catchments.community,
   );
   if (facilityPlan.utilityReserveSqm > 0) {
     const edgePoint = farthestVertex(boundary.geometry, activityCenter);
-    carveFacility(1, "utility", facilityPlan.utilityReserveSqm, edgePoint);
+    carveOneFacility("utility", facilityPlan.utilityReserveSqm, edgePoint);
   }
 
   // Remove residential plots consumed by facilities.
@@ -530,15 +567,68 @@ function toFeature(g: Polygon | MultiPolygon): Feature<Polygon | MultiPolygon> {
   return turf.feature(g);
 }
 
-function averageCentroid(feats: PlanningFeature[]): Position {
-  let x = 0;
-  let y = 0;
-  for (const f of feats) {
-    const c = centroidOf(f.geometry as Polygon);
-    x += c[0];
-    y += c[1];
+/** Fast equirectangular distance in metres between two lng/lat points. */
+function metersBetween(a: Position, b: Position): number {
+  const lat0 = (((a[1] + b[1]) / 2) * Math.PI) / 180;
+  const dx = (b[0] - a[0]) * 111320 * Math.cos(lat0);
+  const dy = (b[1] - a[1]) * 110540;
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Distribute `count` facilities across residential demand for access. Demand
+ * points are in local metres (xs/ys) weighted by `areas`. Each pick maximises
+ * residual demand within `radiusM`, then demand within the catchment is decayed
+ * so the next facility gravitates elsewhere; a spacing penalty spreads
+ * facilities apart even when the catchment covers the whole site. This honours
+ * the population-driven count while placing them for coverage, not clustering.
+ */
+function coverageAnchorIndices(
+  xs: number[],
+  ys: number[],
+  areas: number[],
+  radiusM: number,
+  count: number,
+): number[] {
+  const n = xs.length;
+  if (n === 0 || count <= 0) return [];
+  const r2 = radiusM * radiusM;
+  const minSep2 = (radiusM * 0.75) ** 2;
+  const w = Float64Array.from(areas);
+  const total = areas.reduce((a, b) => a + b, 0) || 1;
+  const stride = Math.max(1, Math.ceil(n / 400)); // cap candidate scans
+  const result: number[] = [];
+  for (let k = 0; k < count; k++) {
+    let best = -1;
+    let bestScore = -Infinity;
+    for (let i = 0; i < n; i += stride) {
+      let score = 0;
+      for (let j = 0; j < n; j++) {
+        const dx = xs[i] - xs[j];
+        const dy = ys[i] - ys[j];
+        if (dx * dx + dy * dy <= r2) score += w[j];
+      }
+      // push facilities apart: penalise proximity to already-placed anchors
+      for (const a of result) {
+        const dx = xs[i] - xs[a];
+        const dy = ys[i] - ys[a];
+        if (dx * dx + dy * dy < minSep2) score -= total;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    if (best < 0) break;
+    result.push(best);
+    // decay served demand within the catchment so the next pick moves away
+    for (let j = 0; j < n; j++) {
+      const dx = xs[best] - xs[j];
+      const dy = ys[best] - ys[j];
+      if (dx * dx + dy * dy <= r2) w[j] *= 0.2;
+    }
   }
-  return [x / feats.length, y / feats.length];
+  return result;
 }
 
 function capitalize(s: string): string {
@@ -580,6 +670,8 @@ function emptySummary(
     estimatedPopulation: 0,
     schools: 0,
     mosques: 0,
+    health: 0,
+    community: 0,
     compatibilityPct: 0,
     diversityScore: 0,
     violations: 0,
@@ -663,6 +755,8 @@ function buildSummary(i: SummaryInput): ScenarioSummary {
     estimatedPopulation,
     schools: countBy("school"),
     mosques: countBy("mosque"),
+    health: countBy("health"),
+    community: countBy("community"),
     compatibilityPct: i.scores.compatibilityPct,
     diversityScore: i.scores.diversityScore,
     violations: i.scores.violations,

@@ -19,10 +19,16 @@ export const FACILITY_RULES = {
   residentsPerSchool: 3000,
   /** 1 recreation area per N residents (minimum 1 if enabled). */
   residentsPerRecreation: 2000,
+  /** 1 health facility (clinic/hospital) per N residents (minimum 1 if enabled). */
+  residentsPerHealth: 10000,
+  /** 1 community / essential-services facility per N residents (min 1 if enabled). */
+  residentsPerCommunity: 5000,
   /** Typical built footprint targets (sqm). */
   mosqueAreaSqm: 1200,
   schoolAreaSqm: 6000,
   recreationAreaSqm: 4000,
+  healthAreaSqm: 5000,
+  communityAreaSqm: 1500,
 };
 
 /** Utility reserve as a fraction of site area, by density. */
@@ -69,6 +75,8 @@ export const LAND_USE_COLORS: Record<LandUseType, string> = {
   industrial: "#8b7fb0", // muted purple
   school: "#4a90e2", // blue
   mosque: "#2ecc8f", // emerald
+  health: "#e11d48", // crimson (hospitals/clinics)
+  community: "#7c3aed", // violet (community / essential services)
   utility: "#f4a236", // orange
   recreation: "#37d4d4", // aqua
   green: "#5bbf5b", // green
@@ -83,6 +91,8 @@ export const LAND_USE_LABELS: Record<LandUseType, string> = {
   industrial: "Industrial",
   school: "School",
   mosque: "Mosque",
+  health: "Health",
+  community: "Community",
   utility: "Utility",
   recreation: "Recreation",
   green: "Green space",
@@ -231,6 +241,8 @@ export const LEGEND_ORDER: LandUseType[] = [
   "industrial",
   "school",
   "mosque",
+  "health",
+  "community",
   "utility",
   "recreation",
   "green",

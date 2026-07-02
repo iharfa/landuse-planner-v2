@@ -7,6 +7,8 @@ import {
 export interface FacilityPlan {
   schools: number;
   mosques: number;
+  health: number;
+  community: number;
   recreation: number;
   utilityReserveSqm: number;
 }
@@ -27,6 +29,12 @@ export function computeFacilityPlan(
   const recreation = controls.recreation
     ? Math.max(1, Math.round(pop / FACILITY_RULES.residentsPerRecreation))
     : 0;
+  const health = controls.health
+    ? Math.max(1, Math.round(pop / FACILITY_RULES.residentsPerHealth))
+    : 0;
+  const community = controls.community
+    ? Math.max(1, Math.round(pop / FACILITY_RULES.residentsPerCommunity))
+    : 0;
 
   const reserveFraction: number =
     UTILITY_RESERVE_FRACTION[controls.density as DensityLevel];
@@ -34,5 +42,5 @@ export function computeFacilityPlan(
     ? siteAreaSqm * reserveFraction
     : 0;
 
-  return { schools, mosques, recreation, utilityReserveSqm };
+  return { schools, mosques, health, community, recreation, utilityReserveSqm };
 }

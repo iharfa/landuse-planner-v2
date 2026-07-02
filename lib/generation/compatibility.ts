@@ -20,6 +20,8 @@ const TYPES: LandUseType[] = [
   "industrial",
   "school",
   "mosque",
+  "health",
+  "community",
   "utility",
   "recreation",
   "green",
@@ -32,6 +34,8 @@ const SELF: Partial<Record<LandUseType, number>> = {
   industrial: 2, // industrial likes to cluster
   school: -2, // avoid clustering schools
   mosque: -2, // avoid clustering mosques
+  health: -1, // spread health facilities out
+  community: 0,
   utility: 1,
   recreation: 0,
   green: 1,
@@ -67,6 +71,25 @@ const PAIRS: [LandUseType, LandUseType, number][] = [
   ["green", "utility", 0],
   ["green", "industrial", 0],
   ["utility", "industrial", 2],
+  // health (hospitals/clinics)
+  ["residential", "health", 2],
+  ["commercial", "health", 1],
+  ["school", "health", 1],
+  ["mosque", "health", 1],
+  ["recreation", "health", 1],
+  ["green", "health", 1],
+  ["health", "utility", 0],
+  ["health", "industrial", -2],
+  // community / essential services
+  ["residential", "community", 2],
+  ["commercial", "community", 1],
+  ["school", "community", 1],
+  ["mosque", "community", 1],
+  ["recreation", "community", 1],
+  ["green", "community", 1],
+  ["health", "community", 1],
+  ["community", "utility", 0],
+  ["community", "industrial", -1],
 ];
 
 function buildMatrix(): Record<string, Record<string, number>> {

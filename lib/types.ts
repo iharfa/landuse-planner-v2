@@ -7,12 +7,22 @@ export type LandUseType =
   | "industrial"
   | "school"
   | "mosque"
+  | "health"
+  | "community"
   | "utility"
   | "recreation"
   | "green"
   | "road"
   | "unassigned"
   | "locked";
+
+/** Facility land uses distributed by population catchment. */
+export type CatchmentUse =
+  | "school"
+  | "mosque"
+  | "health"
+  | "recreation"
+  | "community";
 
 /** How a subtype's plot size is specified. */
 export type ParcelSizing = "dimensions" | "area";
@@ -120,8 +130,15 @@ export interface PlanningControls {
   population: number;
   schools: boolean;
   mosques: boolean;
+  health: boolean;
+  community: boolean;
   utilities: boolean;
   recreation: boolean;
+  /**
+   * Per-amenity walkable catchment radius (metres). Facilities are distributed
+   * so residential areas fall within these radii of each service.
+   */
+  catchments: Record<CatchmentUse, number>;
   /** run the compatibility optimizer after allocation */
   optimizeCompatibility: boolean;
 }
@@ -146,6 +163,8 @@ export interface ScenarioSummary {
   estimatedPopulation: number;
   schools: number;
   mosques: number;
+  health: number;
+  community: number;
   /** compatibility / diversity / violation scores (thesis-style evaluation) */
   compatibilityPct: number;
   diversityScore: number;
@@ -198,7 +217,16 @@ export const DEFAULT_CONTROLS: PlanningControls = {
   population: 5000,
   schools: true,
   mosques: true,
+  health: true,
+  community: true,
   utilities: true,
   recreation: true,
+  catchments: {
+    school: 800,
+    mosque: 500,
+    health: 1500,
+    recreation: 600,
+    community: 800,
+  },
   optimizeCompatibility: true,
 };

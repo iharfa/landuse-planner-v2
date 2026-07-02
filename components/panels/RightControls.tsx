@@ -11,8 +11,13 @@ import {
 } from "@/components/ui/Controls";
 import { ScenarioPanel } from "./ScenarioPanel";
 import { ExportPanel } from "@/components/tools/ExportPanel";
-import { SlidersHorizontal, Users, Building2, Eye, EyeOff } from "lucide-react";
-import type { DensityLevel, WalkabilityTarget, LandUseType } from "@/lib/types";
+import { SlidersHorizontal, Users, Building2, Eye, EyeOff, Target } from "lucide-react";
+import type {
+  DensityLevel,
+  WalkabilityTarget,
+  LandUseType,
+  CatchmentUse,
+} from "@/lib/types";
 import { LAND_USE_COLORS, LAND_USE_LABELS } from "@/lib/generation/constants";
 
 export function RightControls() {
@@ -204,16 +209,68 @@ export function RightControls() {
           checked={controls.recreation}
           onChange={(v) => setControls({ recreation: v })}
         />
+        <Toggle
+          label="Provide health"
+          checked={controls.health}
+          onChange={(v) => setControls({ health: v })}
+        />
+        <Toggle
+          label="Provide community services"
+          checked={controls.community}
+          onChange={(v) => setControls({ community: v })}
+        />
         <p className="text-[10px] text-slate-500 leading-snug">
-          1 mosque / 1,500 · 1 school / 3,000 · 1 recreation / 2,000 residents.
-          Utilities reserve 2–5% of site by density.
+          1 mosque / 1,500 · 1 school / 3,000 · 1 recreation / 2,000 · 1 health
+          / 10,000 · 1 community / 5,000 residents. Utilities reserve 2–5% of
+          site by density.
         </p>
       </Panel>
+
+      <CatchmentControls />
 
       <LayerToggles />
       <ScenarioPanel />
       <ExportPanel />
     </div>
+  );
+}
+
+const CATCHMENT_ITEMS: { key: CatchmentUse; label: string }[] = [
+  { key: "school", label: "School" },
+  { key: "mosque", label: "Mosque" },
+  { key: "health", label: "Health" },
+  { key: "recreation", label: "Recreation" },
+  { key: "community", label: "Community" },
+];
+
+function CatchmentControls() {
+  const catchments = usePlanningStore((s) => s.controls.catchments);
+  const setControls = usePlanningStore((s) => s.setControls);
+  return (
+    <CollapsiblePanel
+      title="Catchments"
+      icon={<Target className="h-3.5 w-3.5" />}
+      defaultOpen={false}
+    >
+      <p className="text-[10px] text-slate-500 leading-snug">
+        Walkable reach of each service. Facilities are placed to keep
+        residential areas within these distances.
+      </p>
+      {CATCHMENT_ITEMS.map((it) => (
+        <LabeledSlider
+          key={it.key}
+          label={`${it.label} catchment`}
+          value={catchments[it.key]}
+          min={200}
+          max={2500}
+          step={50}
+          suffix="m"
+          onChange={(v) =>
+            setControls({ catchments: { ...catchments, [it.key]: v } })
+          }
+        />
+      ))}
+    </CollapsiblePanel>
   );
 }
 

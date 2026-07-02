@@ -41,6 +41,8 @@ export function SummaryPanel() {
         { label: "Est. population", value: summary.estimatedPopulation.toLocaleString() },
         { label: "Schools", value: String(summary.schools) },
         { label: "Mosques", value: String(summary.mosques) },
+        { label: "Health", value: String(summary.health) },
+        { label: "Community", value: String(summary.community) },
         { label: "Compatibility", value: `${summary.compatibilityPct}%` },
         { label: "Diversity", value: String(summary.diversityScore) },
         { label: "Violations", value: String(summary.violations) },

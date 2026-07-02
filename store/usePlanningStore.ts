@@ -158,6 +158,8 @@ const allLayersVisible: Record<LandUseType, boolean> = {
   industrial: true,
   school: true,
   mosque: true,
+  health: true,
+  community: true,
   utility: true,
   recreation: true,
   green: true,
