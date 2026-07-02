@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@turf/turf": "^7.1.0",
+    "@vercel/analytics": "^2.0.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.456.0",
     "maplibre-gl": "^4.7.1",
