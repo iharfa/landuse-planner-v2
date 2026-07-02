@@ -1,10 +1,10 @@
 import type { StyleSpecification } from "maplibre-gl";
 
-export type BasemapId = "satellite" | "osm";
+export type BasemapId = "satellite" | "esri" | "osm";
 
 /**
- * Free, no-key raster basemaps. To swap in MapTiler / Google / a private
- * source later, replace the `tiles` URL (and attribution) below.
+ * Free, no-key raster basemaps. To swap in MapTiler / a private source later,
+ * replace the `tiles` URL (and attribution) below.
  */
 export const BASEMAPS: Record<
   BasemapId,
@@ -12,6 +12,33 @@ export const BASEMAPS: Record<
 > = {
   satellite: {
     label: "Satellite",
+    style: {
+      version: 8,
+      glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+      sources: {
+        // Google satellite — four parallel subdomains and sharp imagery to
+        // ~z21, so tiles fill in fast and don't over-blur when zoomed in.
+        "google-satellite": {
+          type: "raster",
+          tiles: [
+            "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+            "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+            "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+            "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+          ],
+          tileSize: 256,
+          attribution: "Imagery © Google",
+          maxzoom: 21,
+        },
+      },
+      layers: [
+        { id: "bg", type: "background", paint: { "background-color": "#0b1220" } },
+        { id: "google-satellite", type: "raster", source: "google-satellite" },
+      ],
+    },
+  },
+  esri: {
+    label: "Esri",
     style: {
       version: 8,
       glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
